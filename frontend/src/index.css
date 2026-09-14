@@ -1,0 +1,323 @@
+@import "tailwindcss";
+
+@theme {
+  --color-navy-950: #0b1526;
+  --color-navy-900: #0f1e33;
+  --color-navy-800: #16294a;
+  --color-navy-700: #1e3a5f;
+  --color-brand-600: #14213d;
+  --color-brand-500: #1f3868;
+  --color-brand-400: #3b5998;
+  --font-sans: "Public Sans", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Source Serif 4", "Georgia", serif;
+
+  /* Site-wide brand palette match: remaps Tailwind's built-in blue scale to
+     the college's navy/gold identity so already-written blue utilities pick
+     up the new brand color without a per-file rewrite. */
+  --color-blue-400: #3b5998;
+  --color-blue-500: #1f3868;
+  --color-blue-600: #14213d;
+  --color-blue-700: #0d1730;
+  --color-gold: #c99a3b;
+  --color-gold-soft: #f4e9d2;
+
+  /* semantic surface/text/border tokens (theme-reactive via [data-theme], see :root blocks below) */
+  --color-surface-base: #f4f7fb;
+  --color-surface-raised: #ffffff;
+  --color-surface-sunken: #eef2f7;
+  --color-surface-overlay: #ffffff;
+  --color-border-subtle: #e2e8f0;
+  --color-border-default: #cbd5e1;
+  --color-text-primary: #0f1e33;
+  --color-text-secondary: #475569;
+  --color-text-muted: #94a3b8;
+
+  /* status tiers: {name} = text/icon, {name}-subtle = tinted bg, {name}-strong = solid fill */
+  --color-success: #16a34a;
+  --color-success-subtle: #f0fdf4;
+  --color-success-strong: #16a34a;
+  --color-danger: #dc2626;
+  --color-danger-subtle: #fef2f2;
+  --color-danger-strong: #dc2626;
+  --color-warning: #b45309;
+  --color-warning-subtle: #fffbeb;
+  --color-warning-strong: #d97706;
+
+  /* single card-radius standard (resolves rounded-xl/2xl/3xl drift) */
+  --radius-card: 1rem;
+}
+
+/* glass surface tint (adapts with theme); glass-dark below stays fixed for Login's cinematic identity */
+:root {
+  --color-glass-bg: rgba(255, 255, 255, 0.72);
+  --color-glass-border: rgba(255, 255, 255, 0.6);
+  --color-scrollbar-thumb: #cbd5e1;
+  --color-scrollbar-thumb-hover: #94a3b8;
+
+  /* app-shell nav rail: light theme uses a bright rail, dark theme keeps the cinematic navy */
+  --color-sidebar-bg: #ffffff;
+  --color-sidebar-border: var(--color-border-subtle);
+  --color-sidebar-text: #475569;
+  --color-sidebar-text-hover: #0f1e33;
+  --color-sidebar-muted: #94a3b8;
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  /* The light-mode navy brand remap (see @theme above) is unreadable as
+     text/badges on dark surfaces, so dark mode gets a brighter, still-navy
+     variant of the same brand hue instead of the near-black light values. */
+  --color-blue-400: #93b3e0;
+  --color-blue-500: #7196d1;
+  --color-blue-600: #5b83c4;
+  --color-blue-700: #4a6bab;
+
+  --color-surface-base: #0a1220;
+  --color-surface-raised: #111d33;
+  --color-surface-sunken: #0d1729;
+  --color-surface-overlay: #142239;
+  --color-border-subtle: rgba(255, 255, 255, 0.08);
+  --color-border-default: rgba(255, 255, 255, 0.16);
+  --color-text-primary: #f1f5f9;
+  --color-text-secondary: #b7c3d6;
+  --color-text-muted: #7c8aa3;
+
+  --color-success: #4ade80;
+  --color-success-subtle: rgba(34, 197, 94, 0.14);
+  --color-success-strong: #22c55e;
+  --color-danger: #f87171;
+  --color-danger-subtle: rgba(239, 68, 68, 0.14);
+  --color-danger-strong: #ef4444;
+  --color-warning: #fbbf24;
+  --color-warning-subtle: rgba(245, 158, 11, 0.14);
+  --color-warning-strong: #d97706;
+
+  --color-glass-bg: rgba(15, 23, 42, 0.55);
+  --color-glass-border: rgba(255, 255, 255, 0.08);
+  --color-scrollbar-thumb: #334155;
+  --color-scrollbar-thumb-hover: #475569;
+
+  --color-sidebar-bg: #0f1e33;
+  --color-sidebar-border: transparent;
+  --color-sidebar-text: rgba(226, 232, 240, 0.8);
+  --color-sidebar-text-hover: #ffffff;
+  --color-sidebar-muted: rgba(147, 197, 253, 0.7);
+  color-scheme: dark;
+
+  /*
+   * Compatibility layer: most pages still use Tailwind's default gray/white
+   * classes (text-slate-800, bg-white, border-slate-200, ...) directly
+   * rather than the semantic tokens above yet. Tailwind v4 exposes its
+   * default palette as real CSS variables, so remapping the neutral ramp
+   * (and the small set of status/category "-50 tint + -700 text" badge
+   * pairs) here makes every already-written page legible in dark mode
+   * immediately, without a per-file rewrite. Pages get migrated onto the
+   * semantic tokens progressively; this block can shrink as that happens.
+   */
+  --color-slate-50: #16233c;
+  --color-slate-100: #1b2942;
+  --color-slate-200: #263452;
+  --color-slate-300: #3b4a6b;
+  --color-slate-400: #8492ab;
+  --color-slate-500: #a3b0c7;
+  --color-slate-600: #c1cbdf;
+  --color-slate-700: #dbe3f0;
+  --color-slate-800: #eef2f9;
+  --color-slate-900: #f8fafc;
+
+  --color-blue-50: rgba(59, 130, 246, 0.16);
+  --color-blue-700: #93c5fd;
+  --color-green-50: rgba(34, 197, 94, 0.16);
+  --color-green-700: #86efac;
+  --color-red-50: rgba(239, 68, 68, 0.16);
+  --color-red-700: #fca5a5;
+  --color-purple-50: rgba(168, 85, 247, 0.16);
+  --color-purple-700: #d8b4fe;
+  --color-amber-50: rgba(245, 158, 11, 0.16);
+  --color-amber-700: #fcd34d;
+  --color-cyan-50: rgba(6, 182, 212, 0.16);
+  --color-cyan-700: #67e8f9;
+}
+
+/* smooth, controlled theme transition (excluded for reduced-motion users below) */
+body,
+.glass,
+.glass-dark {
+  transition: background-color 0.25s ease, color 0.25s ease, border-color 0.25s ease;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  background: var(--color-surface-base);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+/* thin, unobtrusive scrollbar */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--color-scrollbar-thumb); border-radius: 8px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-scrollbar-thumb-hover); }
+
+/* glass surface used across cards/panels; adapts with theme */
+.glass {
+  background: var(--color-glass-bg);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--color-glass-border);
+}
+
+/* fixed dark cinematic surface for the Login hero — intentionally does not follow the site theme toggle */
+.glass-dark {
+  background: rgba(15, 30, 51, 0.55);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.text-gradient {
+  background: linear-gradient(90deg, #3b82f6, #8b5cf6 60%, #06b6d4);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* ------------------------------------------------------------------
+   Shared glow / hover / reveal system.
+   GPU-cheap only: transform, opacity and box-shadow — no filters or
+   layout-affecting properties, so it stays smooth on low-end devices.
+   ------------------------------------------------------------------ */
+
+/* Lifts and gains a brand-tinted glow on hover. Use on content cards. */
+/* Uses the independent `translate` property rather than `transform`: many of
+   these cards are framer-motion elements that keep an inline `transform`, and
+   an inline style always beats a class rule. `translate` composes with it. */
+.glow-card {
+  transition: translate 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+  will-change: translate;
+}
+.glow-card:hover {
+  translate: 0 -4px;
+  box-shadow:
+    0 18px 40px -18px rgba(37, 99, 235, 0.45),
+    0 0 0 1px color-mix(in srgb, var(--color-brand-600) 22%, transparent);
+}
+:root[data-theme="dark"] .glow-card:hover {
+  box-shadow:
+    0 18px 44px -18px rgba(91, 131, 196, 0.5),
+    0 0 0 1px rgba(147, 179, 224, 0.28);
+}
+
+/* The crest artwork is navy on transparency. That reads well on the light
+   theme, but on the dark theme's near-black surfaces it needs a light plate to
+   hold its contrast. */
+:root[data-theme="dark"] .college-crest {
+  background: rgba(255, 255, 255, 0.93);
+  border-radius: 0.7rem;
+  padding: 2px;
+}
+
+/* Persistent soft glow for hero/feature surfaces. */
+.glow-soft {
+  box-shadow: 0 20px 55px -26px rgba(37, 99, 235, 0.5);
+}
+:root[data-theme="dark"] .glow-soft {
+  box-shadow: 0 20px 55px -24px rgba(91, 131, 196, 0.55);
+}
+
+/* Gold accent glow, for achievement / topper surfaces. */
+.glow-gold {
+  box-shadow: 0 18px 46px -22px rgba(201, 154, 59, 0.55);
+}
+
+/* Buttons: brand glow that intensifies on hover. */
+.glow-btn {
+  transition: translate 0.2s ease, box-shadow 0.25s ease, background-color 0.2s ease;
+}
+.glow-btn:hover {
+  translate: 0 -1px;
+  box-shadow: 0 12px 28px -10px rgba(37, 99, 235, 0.6);
+}
+.glow-btn:active { translate: 0 0; }
+
+/* Image surfaces: gentle zoom + glow on hover. */
+.glow-media { overflow: hidden; }
+.glow-media img {
+  transition: scale 0.5s ease;
+  will-change: scale;
+}
+.glow-media:hover img { scale: 1.05; }
+.glow-media:hover {
+  box-shadow: 0 22px 50px -22px rgba(37, 99, 235, 0.5);
+}
+
+/* Ambient background orb used behind feature sections. */
+.glow-orb {
+  position: absolute;
+  border-radius: 9999px;
+  pointer-events: none;
+  filter: blur(0px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .glow-card,
+  .glow-btn,
+  .glow-media img {
+    transition: none;
+  }
+  .glow-card:hover,
+  .glow-btn:hover {
+    translate: none;
+  }
+  .glow-media:hover img {
+    scale: none;
+  }
+}
+
+.sidebar-link:hover {
+  background: color-mix(in srgb, var(--color-sidebar-text-hover) 8%, transparent);
+}
+.sidebar-link:hover span,
+.sidebar-link:hover svg {
+  color: var(--color-sidebar-text-hover) !important;
+}
+.sidebar-link:focus-visible {
+  outline: 2px solid var(--color-brand-400);
+  outline-offset: 2px;
+}
+
+/* Respect reduced-motion system preference globally as a safety net.
+   Components also check this via the useReducedMotionSafe hook to
+   skip GSAP/3D work entirely, not just shorten CSS transitions. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+@layer components {
+  .input {
+    @apply w-full px-3.5 py-2.5 rounded-xl text-sm
+           focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition-shadow;
+    background: var(--color-surface-raised);
+    border: 1px solid var(--color-border-subtle);
+    color: var(--color-text-primary);
+  }
+  .input:focus {
+    border-color: var(--color-brand-400);
+  }
+  .input::placeholder {
+    color: var(--color-text-muted);
+  }
+}

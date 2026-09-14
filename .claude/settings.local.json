@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install *)",
+      "Bash(tail -c 3000 \"/c/Users/ettas/AppData/Local/Temp/claude/c--Users-ettas-Downloads-college-management-system/08889300-8fe3-498f-b956-e56bbd783221/tasks/bjwcguheo.output\")",
+      "Read(//c/Users/ettas/AppData/Local/Temp/claude/c--Users-ettas-Downloads-college-management-system/08889300-8fe3-498f-b956-e56bbd783221/tasks/**)",
+      "Bash(bash -c 'cd \"/c/Users/ettas/AppData/Local/Temp/claude/c--Users-ettas-Downloads-college-management-system/08889300-8fe3-498f-b956-e56bbd783221/scratchpad/pw\" && node verify1.js')",
+      "Bash(netstat -ano)",
+      "Bash(grep -v \".output$\")",
+      "Bash(node -e ' *)",
+      "Bash(node \"C:\\\\Users\\\\ettas\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-ettas-Downloads-college-management-system\\\\08889300-8fe3-498f-b956-e56bbd783221\\\\scratchpad\\\\fixesc.mjs\")",
+      "Bash(echo \"--- remaining \\\\\\\\uXXXX escapes:\")"
+    ]
+  }
+}
