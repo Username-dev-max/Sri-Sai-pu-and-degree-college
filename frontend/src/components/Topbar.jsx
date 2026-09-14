@@ -17,7 +17,9 @@ export default function Topbar({ title, onMenuClick }) {
 
   function handleLogout() {
     logout();
-    navigate("/login");
+    // `replace` so Back cannot return to an authenticated screen rendered
+    // with the previous account's data.
+    navigate("/login", { replace: true });
   }
 
   return (

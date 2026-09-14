@@ -15,6 +15,7 @@ const MENUS = {
     { to: "/admin/students", label: "Students", icon: Users },
     { to: "/admin/enroll", label: "Enroll Student", icon: UserPlus },
     { to: "/admin/faculty", label: "Faculty", icon: GraduationCap },
+    { to: "/admin/faculty-assignments", label: "Teaching Assignments", icon: ClipboardList },
     { to: "/admin/users", label: "Login Accounts", icon: KeyRound },
     { section: "Academics" },
     { to: "/admin/academic-setup", label: "Academic Setup", icon: Layers },
@@ -45,11 +46,13 @@ const MENUS = {
     { to: "/faculty/marks", label: "Marks Entry", icon: Award },
     { to: "/faculty/assignments", label: "Assignments", icon: FileText },
     { to: "/faculty/timetable", label: "Timetable", icon: CalendarDays },
+    { to: "/faculty/report", label: "Attendance Reports", icon: BarChart3 },
     { to: "/faculty/announcements", label: "Announcements", icon: Megaphone },
     { to: "/faculty/notices", label: "Notices", icon: Bell },
   ],
   "Attendance Staff": [
     { to: "/attendance-staff", label: "Mark Attendance", icon: CalendarCheck, end: true },
+    { to: "/attendance-staff/report", label: "Attendance Reports", icon: BarChart3 },
     { to: "/attendance-staff/announcements", label: "Announcements", icon: Megaphone },
   ],
   Parent: [

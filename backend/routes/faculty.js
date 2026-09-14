@@ -6,6 +6,34 @@ const { createUserAccount, resetUserCredentials } = require("../utils");
 const router = express.Router();
 router.use(verifyToken);
 
+/** Fields only an Admin may ever see on a faculty record. */
+const ADMIN_ONLY_FIELDS = ["salary"];
+
+/** What a Student, Parent or Attendance Staff member may see of a faculty
+ *  record — the same directory-level fields the public site shows. Personal
+ *  contact details are staff-only. */
+const DIRECTORY_FIELDS = ["id", "name", "department", "designation", "qualification", "experience", "photoUrl"];
+
+/**
+ * Project a faculty record for the caller.
+ *  - Admin: everything.
+ *  - Faculty: their OWN record in full (they are entitled to their own
+ *    salary); a colleague's without salary, contact details kept so staff
+ *    can reach one another.
+ *  - Everyone else: directory fields only. GET /:id previously had no role
+ *    guard, so a Student could read any faculty member's phone and email.
+ */
+function projectFaculty(fac, user) {
+  if (user.role === "Admin") return fac;
+  if (user.role === "Faculty") {
+    if (user.linkedId === fac.id) return fac;
+    const out = { ...fac };
+    ADMIN_ONLY_FIELDS.forEach((f) => delete out[f]);
+    return out;
+  }
+  return Object.fromEntries(DIRECTORY_FIELDS.filter((k) => k in fac).map((k) => [k, fac[k]]));
+}
+
 router.get("/", requireRole("Admin", "Faculty"), (req, res) => {
   const db = load();
   const { q, department } = req.query;
@@ -15,14 +43,14 @@ router.get("/", requireRole("Admin", "Faculty"), (req, res) => {
     list = list.filter((f) => f.name.toLowerCase().includes(s) || f.id.toLowerCase().includes(s) || f.email.toLowerCase().includes(s));
   }
   if (department) list = list.filter((f) => f.department === department);
-  res.json({ faculty: list });
+  res.json({ faculty: list.map((f) => projectFaculty(f, req.user)) });
 });
 
 router.get("/:id", (req, res) => {
   const db = load();
   const fac = db.faculty.find((f) => f.id === req.params.id);
   if (!fac) return res.status(404).json({ error: "Faculty not found." });
-  res.json({ faculty: fac });
+  res.json({ faculty: projectFaculty(fac, req.user) });
 });
 
 // POST /api/faculty  (Admin only) — Enroll a new faculty member with a linked login.

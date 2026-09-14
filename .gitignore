@@ -1,5 +1,41 @@
-﻿node_modules/
-.env
-.env.local
+# ---------------------------------------------------------------------------
+# Sri Sai PU and Degree College — College Management System
+# Never commit secrets, runtime data or uploaded files.
+# ---------------------------------------------------------------------------
+
+# Dependencies
+node_modules/
+
+# Build output
 dist/
 build/
+
+# Environment files hold secrets such as JWT_SECRET.
+# The committed template is backend/.env.example.
+.env
+.env.*
+!.env.example
+
+# Logs and OS / editor clutter
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+
+# Runtime database: login accounts (bcrypt password hashes), student and
+# parent records, fee records, audit logs. backend/db.js creates it on first
+# run. Back it up securely — never commit it.
+backend/data.json
+
+# Uploaded files are runtime data, not source code.
+#   uploads/          admin-uploaded images and announcement attachments
+#   private-uploads/  student documents, study notes, leave documents
+backend/uploads/
+backend/private-uploads/
+
+# Record ids of development/demo data created by backend/scripts/dev-seed.mjs
+backend/dev-seed-manifest.json
+
+# Local tool settings (machine-specific)
+.claude/settings.local.json
+.claude/scheduled_tasks.lock

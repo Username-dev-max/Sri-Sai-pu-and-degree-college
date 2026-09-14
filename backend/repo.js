@@ -119,7 +119,13 @@ function commit() {
 
 /**
  * Page a list that has already been filtered/sorted by the caller.
- * Returns the SQL-ish envelope every list endpoint responds with.
+ *
+ * Returns `{ rows, meta }` — deliberately NOT one flat object. Routes
+ * typically sanitise rows before responding (`res.json({ ...meta, users:
+ * rows.map(publicUser) })`); if the page data were mixed into the same object
+ * as the metadata, spreading it would also ship the RAW rows next to the
+ * sanitised ones, leaking whatever the projection was there to strip. Keeping
+ * them apart makes that mistake impossible rather than merely discouraged.
  */
 function paginate(rows, { page = 1, pageSize = 25 } = {}) {
   const total = rows.length;
@@ -127,7 +133,10 @@ function paginate(rows, { page = 1, pageSize = 25 } = {}) {
   const pages = Math.max(1, Math.ceil(total / size));
   const current = Math.max(1, Math.min(Number(page) || 1, pages));
   const start = (current - 1) * size;
-  return { rows: rows.slice(start, start + size), total, page: current, pageSize: size, pages };
+  return {
+    rows: rows.slice(start, start + size),
+    meta: { total, page: current, pageSize: size, pages },
+  };
 }
 
 module.exports = {

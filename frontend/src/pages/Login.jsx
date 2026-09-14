@@ -33,7 +33,7 @@ const ROLES = [
 
 export default function Login() {
   const navigate = useNavigate();
-  const { login, user, updateUser } = useAuth();
+  const { login, logout, user, updateUser } = useAuth();
   const { push } = useToast();
   const { theme, toggleTheme } = useTheme();
   const reduced = usePrefersReducedMotion();
@@ -45,11 +45,15 @@ export default function Login() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
-  const [remember, setRemember] = useState(true);
+  // Off by default: this is often a shared college computer. It keeps the
+  // session (never the password) after the browser closes.
+  const [remember, setRemember] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [pendingReset, setPendingReset] = useState(false);
   const [forgotOpen, setForgotOpen] = useState(false);
+  // True only after a successful sign-in performed on this page.
+  const [justLoggedIn, setJustLoggedIn] = useState(false);
 
   // ---- cat state machine -------------------------------------------------
   const [focusField, setFocusField] = useState(null); // 'username' | 'password' | null
@@ -104,6 +108,28 @@ export default function Login() {
     }
   }
 
+  /**
+   * Switching role starts a completely fresh attempt. It used to change only
+   * the highlighted pill and clear the error, so a username and password typed
+   * for Admin stayed in the fields once Student was selected. Everything from
+   * the previous attempt is reset here, and the form below is keyed by role so
+   * its inputs remount empty — which also discards anything the browser's
+   * autofill had painted into the old inputs.
+   */
+  function selectRole(next) {
+    if (next === role) return;
+    if (resultTimer.current) clearTimeout(resultTimer.current);
+    clearPause();
+    setRole(next);
+    setUsername("");
+    setPassword("");
+    setShowPw(false);
+    setError("");
+    setLoading(false);
+    setFocusField(null);
+    setCatState("idle");
+  }
+
   function handlePasswordChange(e) {
     setPassword(e.target.value);
     if (showCat) {
@@ -112,11 +138,34 @@ export default function Login() {
     }
   }
 
+  /**
+   * Arriving at /login means "I want to sign in", so any session already in
+   * the browser is ended here.
+   *
+   * This page used to redirect an authenticated visitor straight back to
+   * their dashboard, which made the form unreachable: after signing in as
+   * Admin you could never get to the login screen to sign in as a Student —
+   * you were silently returned to the Admin dashboard and appeared stuck in
+   * the previous role. Clearing on arrival guarantees the credentials typed
+   * below are the ones actually authenticated.
+   */
+  const clearedOnArrival = useRef(false);
   useEffect(() => {
-    if (user && !pendingReset) {
+    if (clearedOnArrival.current) return;
+    clearedOnArrival.current = true;
+    if (user) logout();
+  }, [user, logout]);
+
+  /**
+   * Navigate only after a sign-in performed ON THIS PAGE. `justLoggedIn`
+   * distinguishes that from a pre-existing session, which the effect above
+   * has already ended.
+   */
+  useEffect(() => {
+    if (justLoggedIn && user && !pendingReset) {
       navigate(ROLE_HOME[user.role] || "/student", { replace: true });
     }
-  }, [user, pendingReset, navigate]);
+  }, [justLoggedIn, user, pendingReset, navigate]);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -125,7 +174,10 @@ export default function Login() {
     setCatState("checking");
     sounds.thinking();
     try {
-      const u = await login(username.trim(), password);
+      // Only what is in THIS form, plus the selected role. The server rejects a
+      // role mismatch, so leftover credentials can't sign into another role.
+      const u = await login(username.trim(), password, { role, remember });
+      setJustLoggedIn(true);
       setCatState("success");
       sounds.success();
       if (u.mustReset) {
@@ -143,6 +195,8 @@ export default function Login() {
       sounds.error();
       setError("Oops! Please check your details.");
       setLoading(false);
+      // A rejected password is never left sitting in the field.
+      setPassword("");
       resultTimer.current = setTimeout(() => setCatState(restingState()), 1600);
     }
   }
@@ -231,7 +285,7 @@ export default function Login() {
                   <button
                     key={r.key}
                     type="button"
-                    onClick={() => { setRole(r.key); setError(""); }}
+                    onClick={() => selectRole(r.key)}
                     aria-pressed={active}
                     className={`relative flex flex-col items-center gap-1 py-2 rounded-lg text-[10px] font-semibold transition-colors ${
                       active ? "text-white" : "text-blue-100/50 hover:text-blue-100/80"
@@ -262,7 +316,12 @@ export default function Login() {
               }}
             />
           ) : (
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form
+              key={role}
+              name={`login-${role.toLowerCase().replace(/\s+/g, "-")}`}
+              onSubmit={handleSubmit}
+              className="space-y-4"
+            >
               <div>
                 <label htmlFor="login-username" className="block text-xs font-medium text-blue-200/70 mb-1.5">
                   {role === "Student" ? "Student ID / Username" : "Username"}
@@ -274,7 +333,11 @@ export default function Login() {
                   onFocus={() => setFocusField("username")}
                   onBlur={() => setFocusField(null)}
                   required
+                  name="username"
                   autoComplete="username"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
                   placeholder={activeRole.hint}
                   className="w-full px-3.5 py-2.5 rounded-xl bg-white/10 border border-white/15 text-sm placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-blue-400/50 focus:border-blue-400/60 transition-shadow"
                 />
@@ -291,6 +354,7 @@ export default function Login() {
                     onFocus={() => setFocusField("password")}
                     onBlur={() => setFocusField(null)}
                     required
+                    name="password"
                     autoComplete="current-password"
                     placeholder="••••••••"
                     className="w-full px-3.5 py-2.5 pr-10 rounded-xl bg-white/10 border border-white/15 text-sm placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-blue-400/50 focus:border-blue-400/60 transition-shadow"
@@ -312,6 +376,7 @@ export default function Login() {
                     type="checkbox"
                     checked={remember}
                     onChange={(e) => setRemember(e.target.checked)}
+                    title="Stay signed in on this device after the browser closes. Your password is never stored."
                     className="rounded border-white/30 bg-white/10"
                   />
                   Remember me
@@ -432,6 +497,8 @@ function ForceResetForm({ currentPassword, onDone }) {
         <label className="block text-xs font-medium text-blue-200/70 mb-1.5">New password</label>
         <input
           type="password"
+          name="new-password"
+          autoComplete="new-password"
           value={newPassword}
           onChange={(e) => setNewPassword(e.target.value)}
           required
@@ -443,6 +510,8 @@ function ForceResetForm({ currentPassword, onDone }) {
         <label className="block text-xs font-medium text-blue-200/70 mb-1.5">Confirm new password</label>
         <input
           type="password"
+          name="confirm-new-password"
+          autoComplete="new-password"
           value={confirm}
           onChange={(e) => setConfirm(e.target.value)}
           required

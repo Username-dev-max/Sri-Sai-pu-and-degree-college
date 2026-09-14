@@ -84,8 +84,8 @@ router.get("/search", (req, res) => {
     return ax !== bx ? ax - bx : a.title.localeCompare(b.title);
   });
 
-  const paged = repo.paginate(results, { page: req.query.page, pageSize: req.query.pageSize });
-  res.json({ ...paged, results: paged.rows, query: req.query.q });
+  const { rows, meta } = repo.paginate(results, { page: req.query.page, pageSize: req.query.pageSize });
+  res.json({ ...meta, results: rows, query: req.query.q });
 });
 
 // GET /api/admin/audit?action=&entityType=&actorId=&from=&to=&page=
@@ -104,10 +104,10 @@ router.get("/audit", (req, res) => {
   }
 
   list.sort((a, b) => new Date(b.at) - new Date(a.at));
-  const paged = repo.paginate(list, { page: req.query.page, pageSize: req.query.pageSize || 40 });
+  const { rows, meta } = repo.paginate(list, { page: req.query.page, pageSize: req.query.pageSize || 40 });
   res.json({
-    ...paged,
-    logs: paged.rows,
+    ...meta,
+    logs: rows,
     // Distinct values so the UI can build its filter dropdowns from real data.
     actions: [...new Set(repo.findAll("auditLogs").map((l) => l.action))].sort(),
     entityTypes: [...new Set(repo.findAll("auditLogs").map((l) => l.entityType))].sort(),

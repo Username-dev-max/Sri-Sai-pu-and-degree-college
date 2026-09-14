@@ -2,9 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Check, X, Save, AlertTriangle, Users } from "lucide-react";
 import client from "../api/client";
-import { useAuth } from "../context/AuthContext";
 import { useData } from "../context/DataContext";
 import { useToast } from "../context/ToastContext";
+import useMySubjects from "../hooks/useMySubjects";
 import TiltCard from "../components/TiltCard";
 import Loader from "../components/Loader";
 import EmptyState from "../components/EmptyState";
@@ -16,13 +16,12 @@ import { Table, TableHead, TableTh, TableBody, TableTd } from "../components/Tab
  * mark it for any subject, so they render this same screen with `allSubjects`.
  */
 export default function Attendance({ allSubjects = false }) {
-  const { user } = useAuth();
   const { subjects } = useData();
   const { push } = useToast();
-  const mySubjects = useMemo(
-    () => (allSubjects ? subjects : subjects.filter((s) => s.faculty === user.linkedId)),
-    [subjects, user.linkedId, allSubjects]
-  );
+  // Scope comes from the server's assignment records, not a client-side
+  // filter — the write is rejected server-side for anything not listed here.
+  const { subjects: mySubjectsRaw, unrestricted } = useMySubjects({ allSubjects });
+  const mySubjects = mySubjectsRaw || [];
 
   const [subject, setSubject] = useState("");
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -37,23 +36,29 @@ export default function Attendance({ allSubjects = false }) {
 
   useEffect(() => {
     if (!subject) return;
-    const sub = subjects.find((s) => s.id === subject);
-    if (!sub) return;
     setLoading(true);
+    // The roster is every student whose combination includes this subject —
+    // that mapping lives in the database (Academic Setup), so the register
+    // follows whatever the college has configured.
     Promise.all([
-      client.get("/students", { params: { course: sub.course } }),
+      client.get("/academic-config"),
+      client.get("/students"),
       client.get(`/attendance/subject/${subject}`, { params: { date } }),
     ])
-      .then(([stuRes, attRes]) => {
-        const list = stuRes.data.students.filter((s) => s.semester === sub.semester);
+      .then(([cfgRes, stuRes, attRes]) => {
+        const courseIds = (cfgRes.data.combinations || [])
+          .filter((c) => (c.subjects || []).some((s) => s.id === subject))
+          .map((c) => c.id);
+        const list = (stuRes.data.students || []).filter((s) => courseIds.includes(s.course));
         setStudents(list);
         const map = {};
         list.forEach((s) => { map[s.id] = "Present"; });
         attRes.data.attendance.forEach((a) => { map[a.student] = a.status; });
         setStatusMap(map);
       })
+      .catch(() => setStudents([]))
       .finally(() => setLoading(false));
-  }, [subject, date, subjects]);
+  }, [subject, date]);
 
   function toggle(studentId, status) {
     setStatusMap((m) => ({ ...m, [studentId]: status }));
@@ -74,6 +79,24 @@ export default function Attendance({ allSubjects = false }) {
 
   const belowCount = students.filter((s) => statusMap[s.id] === "Absent").length;
 
+  if (mySubjectsRaw === null) return <Loader full label="Loading your subjects…" />;
+
+  // An unassigned faculty account is a configuration state, not an error —
+  // say what is missing and who fixes it rather than showing an empty picker.
+  if (mySubjects.length === 0) {
+    return (
+      <EmptyState
+        icon={AlertTriangle}
+        title="No subjects assigned to you"
+        description={
+          unrestricted
+            ? "No subjects have been set up yet. Add them under Academic Setup."
+            : "You can't mark attendance until an administrator assigns you a subject. Ask the college office to add your teaching assignments."
+        }
+      />
+    );
+  }
+
   return (
     <div>
       <TiltCard intensity={1.5} className="glass rounded-2xl p-5 shadow-sm mb-5">
@@ -81,7 +104,7 @@ export default function Attendance({ allSubjects = false }) {
           <div>
             <label className="block text-xs font-medium text-slate-500 mb-1">Subject</label>
             <select value={subject} onChange={(e) => setSubject(e.target.value)} className="input">
-              {mySubjects.map((s) => <option key={s.id} value={s.id}>{s.name} (Sem {s.semester})</option>)}
+              {mySubjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
           </div>
           <div>

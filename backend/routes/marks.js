@@ -2,6 +2,8 @@ const express = require("express");
 const { load, save } = require("../db");
 const { verifyToken, requireRole } = require("../middleware/auth");
 const { gradeFor } = require("../utils");
+const { canTouchSubject, canViewStudent } = require("../scope");
+const { audit, notify } = require("../services");
 
 const router = express.Router();
 router.use(verifyToken);
@@ -22,6 +24,10 @@ router.post("/", requireRole("Faculty", "Admin"), (req, res) => {
   const db = load();
   const b = req.body || {};
   if (!b.student || !b.subject) return res.status(400).json({ error: "student and subject are required." });
+  // Faculty may only enter marks for subjects they are assigned to teach.
+  if (!canTouchSubject(req.user, b.subject, db)) {
+    return res.status(403).json({ error: "You are not assigned to this subject." });
+  }
   const err = validateComponents(b);
   if (err) return res.status(400).json({ error: err });
 
@@ -41,26 +47,54 @@ router.post("/", requireRole("Faculty", "Admin"), (req, res) => {
     exam: Number(b.exam || 0), examMax: MAX.exam,
     total, maxTotal, percentage, grade, result,
   };
+  const isNew = !record;
   if (record) Object.assign(record, payload);
   else db.marks.push(payload);
   save(db);
+
+  audit(req, {
+    action: isNew ? "marks.entered" : "marks.updated",
+    entityType: "marks",
+    entityId: id,
+    summary: `${isNew ? "Entered" : "Updated"} marks for ${b.student} in ${b.subject} (${total}/${maxTotal})`,
+  });
+
+  // Tell the student — and their parent — that a result was published.
+  const targets = db.users.filter(
+    (u) =>
+      (u.role === "Student" && u.linkedId === b.student) ||
+      (u.role === "Parent" && (u.linkedIds || [u.linkedId]).includes(b.student))
+  );
+  targets.forEach((u) =>
+    notify(u.id, {
+      title: "Result published",
+      message: `Marks for ${b.subject} are now available.`,
+      type: "info",
+      relatedType: "marks",
+      relatedId: id,
+    })
+  );
+
   res.status(201).json({ marks: payload });
 });
 
 // GET /api/marks/subject/:subject  (Faculty roster of marks for a subject)
 router.get("/subject/:subject", requireRole("Faculty", "Admin"), (req, res) => {
   const db = load();
+  if (!canTouchSubject(req.user, req.params.subject, db)) {
+    return res.status(403).json({ error: "You are not assigned to this subject." });
+  }
   res.json({ marks: db.marks.filter((m) => m.subject === req.params.subject) });
 });
 
 // GET /api/results/:studentId  (Admin, Faculty, or the student themself) — mounted separately, see server.js
 function resultsHandler(req, res) {
-  const allowed =
-    req.user.role === "Admin" ||
-    req.user.role === "Faculty" ||
-    ((req.user.role === "Student" || req.user.role === "Parent") && req.user.linkedId === req.params.studentId);
-  if (!allowed) return res.status(403).json({ error: "Not authorized." });
   const db = load();
+  // Scoped centrally: a Parent linked to several children may read each of
+  // them, a Faculty member only students in the classes they teach.
+  if (!canViewStudent(req.user, req.params.studentId, db)) {
+    return res.status(403).json({ error: "Not authorized." });
+  }
   const records = db.marks.filter((m) => m.student === req.params.studentId);
   const totalMax = records.reduce((a, r) => a + r.maxTotal, 0);
   const totalObtained = records.reduce((a, r) => a + r.total, 0);

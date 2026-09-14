@@ -9,7 +9,7 @@ const express = require("express");
 const bcrypt = require("bcryptjs");
 const repo = require("../repo");
 const { load, save } = require("../db");
-const { verifyToken, requireRole } = require("../middleware/auth");
+const { verifyToken, requireRole, revokeUserSessions } = require("../middleware/auth");
 const { generateUsername, generatePassword } = require("../utils");
 const { audit, notify } = require("../services");
 
@@ -66,8 +66,8 @@ router.get("/", (req, res) => {
   if (status) list = list.filter((u) => (u.status || "Active") === status);
 
   list.sort((a, b) => a.username.localeCompare(b.username));
-  const result = repo.paginate(list, { page, pageSize });
-  res.json({ ...result, users: result.rows.map((u) => publicUser(u, db)) });
+  const { rows, meta } = repo.paginate(list, { page, pageSize });
+  res.json({ ...meta, users: rows.map((u) => publicUser(u, db)) });
 });
 
 // GET /api/users/stats — account counts by role and status, for the dashboard.
@@ -201,6 +201,8 @@ router.patch("/:id/status", (req, res) => {
   const before = user.status || "Active";
   user.status = status;
   save(db);
+  // Deactivation also closes the account's open sessions outright.
+  if (status === "Inactive") revokeUserSessions(user.id, { reason: "deactivated" });
 
   audit(req, {
     action: status === "Active" ? "account.activated" : "account.deactivated",
@@ -232,6 +234,8 @@ router.post("/:id/reset-password", (req, res) => {
   user.password = bcrypt.hashSync(plainPassword, 10);
   user.mustReset = true;
   save(db);
+  // Anyone still signed in with the old password is signed out now.
+  revokeUserSessions(user.id, { reason: "password-reset-by-admin" });
 
   audit(req, {
     action: "account.password_reset",

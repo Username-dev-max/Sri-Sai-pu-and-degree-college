@@ -10,6 +10,7 @@ import TiltCard from "../components/TiltCard";
 import StatCard from "../components/StatCard";
 import EmptyState from "../components/EmptyState";
 import StatusBadge from "../components/StatusBadge";
+import Button from "../components/Button";
 
 const STATUS_TONE = {
   Paid: "success",
@@ -24,6 +25,7 @@ export default function Fees() {
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [payTarget, setPayTarget] = useState(null);
+  const [planTarget, setPlanTarget] = useState(null);
   const [amount, setAmount] = useState("");
   const [mode, setMode] = useState("Cash");
   const [saving, setSaving] = useState(false);
@@ -114,7 +116,13 @@ export default function Fees() {
                     <td className="px-4 py-3">
                       <StatusBadge tone={STATUS_TONE[f.status]}>{f.status}</StatusBadge>
                     </td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="px-4 py-3 text-right whitespace-nowrap">
+                      <button
+                        onClick={() => setPlanTarget(f)}
+                        className="text-xs font-semibold text-slate-600 hover:bg-slate-100 px-3 py-1.5 rounded-lg"
+                      >
+                        Installments
+                      </button>
                       {f.status !== "Paid" && (
                         <button
                           onClick={() => setPayTarget(f)}
@@ -131,6 +139,13 @@ export default function Fees() {
           </div>
         )}
       </TiltCard>
+
+      <InstallmentsModal
+        fee={planTarget}
+        studentName={studentName}
+        onClose={() => setPlanTarget(null)}
+        onChanged={load}
+      />
 
       <Modal open={!!payTarget} onClose={() => setPayTarget(null)} title="Record Payment" width="max-w-sm">
         {payTarget && (
@@ -159,5 +174,133 @@ export default function Fees() {
         )}
       </Modal>
     </div>
+  );
+}
+
+/**
+ * Schedule a student's fee across installments. The server refuses a schedule
+ * that exceeds the total fee, and refuses to delete an installment a payment
+ * has already settled.
+ */
+function InstallmentsModal({ fee, studentName, onClose, onChanged }) {
+  const { push } = useToast();
+  const [rows, setRows] = useState(null);
+  const [label, setLabel] = useState("");
+  const [amount, setAmount] = useState("");
+  const [dueDate, setDueDate] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!fee) return setRows(null);
+    setLabel(""); setAmount(""); setDueDate("");
+    client
+      .get(`/fees/${fee.student}`)
+      .then(({ data }) => setRows(data.installments || []))
+      .catch(() => setRows([]));
+  }, [fee]);
+
+  const scheduled = (rows || []).reduce((s, r) => s + Number(r.amount || 0), 0);
+  const unscheduled = fee ? fee.total - scheduled : 0;
+
+  async function add(e) {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      await client.post(`/fees/${fee.student}/installments`, { label, amount: Number(amount), dueDate });
+      push("Installment scheduled.", "success");
+      const { data } = await client.get(`/fees/${fee.student}`);
+      setRows(data.installments || []);
+      setLabel(""); setAmount(""); setDueDate("");
+      onChanged();
+    } catch (err) {
+      push(err.response?.data?.error || "Could not schedule the installment.", "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove(id) {
+    setBusy(true);
+    try {
+      await client.delete(`/fees/installments/${id}`);
+      const { data } = await client.get(`/fees/${fee.student}`);
+      setRows(data.installments || []);
+      onChanged();
+    } catch (err) {
+      push(err.response?.data?.error || "Could not remove the installment.", "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal open={!!fee} onClose={onClose} title={fee ? `Installments — ${studentName(fee.student)}` : ""}>
+      {fee && (
+        <div className="space-y-4">
+          <div className="flex justify-between text-sm rounded-xl p-3" style={{ background: "var(--color-surface-sunken)" }}>
+            <span style={{ color: "var(--color-text-muted)" }}>Total fee</span>
+            <span className="font-semibold" style={{ color: "var(--color-text-primary)" }}>
+              ₹{fee.total.toLocaleString("en-IN")}
+            </span>
+          </div>
+          <div className="flex justify-between text-sm px-3">
+            <span style={{ color: "var(--color-text-muted)" }}>Still unscheduled</span>
+            <span className="font-semibold" style={{ color: unscheduled > 0 ? "var(--color-warning)" : "var(--color-success)" }}>
+              ₹{unscheduled.toLocaleString("en-IN")}
+            </span>
+          </div>
+
+          {rows === null ? (
+            <Loader label="Loading…" />
+          ) : rows.length === 0 ? (
+            <p className="text-sm text-center py-4" style={{ color: "var(--color-text-muted)" }}>
+              No installments scheduled. The full amount is due in one payment.
+            </p>
+          ) : (
+            <div className="space-y-1.5">
+              {rows.map((r) => (
+                <div key={r.id} className="flex items-center justify-between gap-3 text-sm py-2 border-b last:border-0" style={{ borderColor: "var(--color-border-subtle)" }}>
+                  <div className="min-w-0">
+                    <div className="font-medium" style={{ color: "var(--color-text-primary)" }}>{r.label}</div>
+                    <div className="text-xs" style={{ color: "var(--color-text-muted)" }}>{r.dueDate || "No due date"}</div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="font-semibold tabular-nums" style={{ color: "var(--color-text-primary)" }}>
+                      ₹{Number(r.amount).toLocaleString("en-IN")}
+                    </span>
+                    <StatusBadge tone={r.status === "Paid" ? "success" : "warning"}>{r.status}</StatusBadge>
+                    {r.status !== "Paid" && (
+                      <button onClick={() => remove(r.id)} disabled={busy} aria-label={`Remove ${r.label}`} className="text-red-600 text-xs font-semibold px-1.5">
+                        ×
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {unscheduled > 0 && (
+            <form onSubmit={add} className="space-y-3 pt-2 border-t" style={{ borderColor: "var(--color-border-subtle)" }}>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Label</label>
+                  <input value={label} onChange={(e) => setLabel(e.target.value)} className="input" placeholder="e.g. Term 1" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Amount *</label>
+                  <input type="number" min="1" max={unscheduled} value={amount} onChange={(e) => setAmount(e.target.value)} className="input" required />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Due date</label>
+                <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="input" />
+              </div>
+              <Button type="submit" loading={busy} className="w-full">Add Installment</Button>
+            </form>
+          )}
+        </div>
+      )}
+    </Modal>
   );
 }

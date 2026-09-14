@@ -37,6 +37,8 @@ const AnnouncementsView = lazy(() => import("./pages/AnnouncementsView"));
 const AuditLog = lazy(() => import("./pages/AuditLog"));
 const AcademicSetup = lazy(() => import("./pages/AcademicSetup"));
 const StudentProfile = lazy(() => import("./pages/StudentProfile"));
+const FacultyAssignments = lazy(() => import("./pages/FacultyAssignments"));
+const AttendanceReport = lazy(() => import("./pages/AttendanceReport"));
 
 const FacultyDirectory = lazy(() => import("./pages/FacultyDirectory"));
 const FacultyProfile = lazy(() => import("./pages/FacultyProfile"));
@@ -101,6 +103,7 @@ function AnimatedRoutes() {
         <Route path="/admin/students" element={<Wrapped role="Admin" title="Student Management"><Students /></Wrapped>} />
         <Route path="/admin/enroll" element={<Wrapped role="Admin" title="Enroll Student"><EnrollStudent /></Wrapped>} />
         <Route path="/admin/users" element={<Wrapped role="Admin" title="Login Accounts"><UserAccounts /></Wrapped>} />
+        <Route path="/admin/faculty-assignments" element={<Wrapped role="Admin" title="Teaching Assignments"><FacultyAssignments /></Wrapped>} />
         <Route path="/admin/academic-setup" element={<Wrapped role="Admin" title="Academic Setup"><AcademicSetup /></Wrapped>} />
         <Route path="/admin/announcements" element={<Wrapped role="Admin" title="Announcements"><AnnouncementsAdmin /></Wrapped>} />
         <Route path="/admin/audit" element={<Wrapped role="Admin" title="Audit Log"><AuditLog /></Wrapped>} />
@@ -129,9 +132,11 @@ function AnimatedRoutes() {
         <Route path="/faculty/timetable" element={<Wrapped role="Faculty" title="My Timetable"><FacultyTimetable /></Wrapped>} />
         <Route path="/faculty/notices" element={<Wrapped role="Faculty" title="Notices"><Notices /></Wrapped>} />
         <Route path="/faculty/announcements" element={<Wrapped role="Faculty" title="Announcements"><AnnouncementsView /></Wrapped>} />
+        <Route path="/faculty/report" element={<Wrapped role="Faculty" title="Attendance Reports"><AttendanceReport /></Wrapped>} />
 
         {/* Attendance Staff */}
         <Route path="/attendance-staff" element={<Wrapped role="Attendance Staff" title="Mark Attendance"><AttendanceStaffDashboard /></Wrapped>} />
+        <Route path="/attendance-staff/report" element={<Wrapped role="Attendance Staff" title="Attendance Reports"><AttendanceReport allSubjects /></Wrapped>} />
         <Route path="/attendance-staff/announcements" element={<Wrapped role="Attendance Staff" title="Announcements"><AnnouncementsView /></Wrapped>} />
 
         {/* Parent */}

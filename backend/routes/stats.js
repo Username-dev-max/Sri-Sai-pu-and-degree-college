@@ -72,10 +72,12 @@ router.get("/", (req, res) => {
   };
 
   /* --------------------------------- fees -------------------------------- */
-  // Fee rows carry amount + paid. "Pending" is whatever is still outstanding.
+  // Fee rows carry `total` (billed) and `paid`; "pending" is the difference.
+  // Note the field is `total`, not `amount` — reading the wrong one silently
+  // reports ₹0 across the whole dashboard.
   const feeTotals = fees.reduce(
     (acc, f) => {
-      const amount = Number(f.amount) || 0;
+      const amount = Number(f.total) || 0;
       const paid = Number(f.paid) || 0;
       acc.billed += amount;
       acc.collected += Math.min(paid, amount);

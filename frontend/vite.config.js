@@ -10,6 +10,13 @@ export default defineConfig({
         target: 'http://localhost:5000',
         changeOrigin: true,
       },
+      // Admin-uploaded images and attachments are served by the backend.
+      // Without this, the dev server answered /uploads/... with its own HTML
+      // page, so every uploaded image rendered as broken.
+      '/uploads': {
+        target: 'http://localhost:5000',
+        changeOrigin: true,
+      },
     },
   },
   build: {

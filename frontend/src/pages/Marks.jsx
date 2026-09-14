@@ -1,10 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Save, Award } from "lucide-react";
+import { Save, Award, AlertTriangle } from "lucide-react";
 import client from "../api/client";
-import { useAuth } from "../context/AuthContext";
-import { useData } from "../context/DataContext";
 import { useToast } from "../context/ToastContext";
+import useMySubjects from "../hooks/useMySubjects";
 import TiltCard from "../components/TiltCard";
 import Loader from "../components/Loader";
 import EmptyState from "../components/EmptyState";
@@ -28,10 +27,10 @@ function gradeTone(g) {
 }
 
 export default function Marks() {
-  const { user } = useAuth();
-  const { subjects } = useData();
   const { push } = useToast();
-  const mySubjects = useMemo(() => subjects.filter((s) => s.faculty === user.linkedId), [subjects, user.linkedId]);
+  // Server-defined teaching scope — see useMySubjects.
+  const { subjects: mySubjectsRaw, unrestricted } = useMySubjects();
+  const mySubjects = mySubjectsRaw || [];
 
   const [subject, setSubject] = useState("");
   const [students, setStudents] = useState([]);
@@ -45,15 +44,19 @@ export default function Marks() {
 
   useEffect(() => {
     if (!subject) return;
-    const sub = subjects.find((s) => s.id === subject);
-    if (!sub) return;
     setLoading(true);
+    // Same roster rule as attendance: students whose combination includes
+    // this subject, per the mapping stored in Academic Setup.
     Promise.all([
-      client.get("/students", { params: { course: sub.course } }),
+      client.get("/academic-config"),
+      client.get("/students"),
       client.get(`/marks/subject/${subject}`),
     ])
-      .then(([stuRes, markRes]) => {
-        const list = stuRes.data.students.filter((s) => s.semester === sub.semester);
+      .then(([cfgRes, stuRes, markRes]) => {
+        const courseIds = (cfgRes.data.combinations || [])
+          .filter((c) => (c.subjects || []).some((s) => s.id === subject))
+          .map((c) => c.id);
+        const list = (stuRes.data.students || []).filter((s) => courseIds.includes(s.course));
         setStudents(list);
         const map = {};
         list.forEach((s) => { map[s.id] = { internal: "", assignment: "", practical: "", exam: "" }; });
@@ -62,8 +65,9 @@ export default function Marks() {
         });
         setRows(map);
       })
+      .catch(() => setStudents([]))
       .finally(() => setLoading(false));
-  }, [subject, subjects]);
+  }, [subject]);
 
   function update(studentId, field, value) {
     const num = value === "" ? "" : Math.max(0, Math.min(MAX[field], Number(value)));
@@ -90,12 +94,28 @@ export default function Marks() {
     }
   }
 
+  if (mySubjectsRaw === null) return <Loader full label="Loading your subjects…" />;
+
+  if (mySubjects.length === 0) {
+    return (
+      <EmptyState
+        icon={AlertTriangle}
+        title="No subjects assigned to you"
+        description={
+          unrestricted
+            ? "No subjects have been set up yet. Add them under Academic Setup."
+            : "You can't enter marks until an administrator assigns you a subject. Ask the college office to add your teaching assignments."
+        }
+      />
+    );
+  }
+
   return (
     <div>
       <TiltCard intensity={1.5} className="glass rounded-2xl p-5 shadow-sm mb-5">
         <label className="block text-xs font-medium text-slate-500 mb-1">Subject</label>
         <select value={subject} onChange={(e) => setSubject(e.target.value)} className="input max-w-sm">
-          {mySubjects.map((s) => <option key={s.id} value={s.id}>{s.name} (Sem {s.semester})</option>)}
+          {mySubjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
       </TiltCard>
 

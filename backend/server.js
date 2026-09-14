@@ -20,6 +20,13 @@ const statsRoutes = require("./routes/stats");
 const searchRoutes = require("./routes/search");
 const academicConfigRoutes = require("./routes/academicConfig");
 const documentRoutes = require("./routes/documents");
+const facultyAssignmentRoutes = require("./routes/facultyAssignments");
+const timetableRoutes = require("./routes/timetable");
+const classTeacherRoutes = require("./routes/classTeachers");
+const leaveRequestRoutes = require("./routes/leaveRequests");
+const noteRoutes = require("./routes/notes");
+const callFollowupRoutes = require("./routes/callFollowups");
+const internalMarkRoutes = require("./routes/internalMarks");
 const { verifyToken } = require("./middleware/auth");
 const path = require("path");
 
@@ -29,6 +36,17 @@ app.use(express.json());
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 app.get("/api/health", (req, res) => res.json({ ok: true, service: "cms-backend" }));
+
+// Authenticated responses must never be served from a cache: after logout,
+// the Back button or a shared proxy could otherwise redisplay the previous
+// user's data. The public site's endpoints are left cacheable.
+app.use("/api", (req, res, next) => {
+  if (!req.path.startsWith("/public")) {
+    res.setHeader("Cache-Control", "no-store, private");
+    res.setHeader("Pragma", "no-cache");
+  }
+  next();
+});
 
 app.use("/api/public", publicRoutes);
 app.use("/api/admissions-inquiries", genericCrud("admissionInquiries", "INQ", ["Admin"], ["Admin"]));
@@ -57,7 +75,7 @@ app.use("/api/academic-years", genericCrud("academicYears", "AY", ["Admin"]));
 app.use("/api/sections", genericCrud("sections", "SEC", ["Admin"]));
 app.use("/api/classes", genericCrud("classes", "CLS", ["Admin"]));
 app.use("/api/streams", genericCrud("streams", "STR", ["Admin"]));
-app.use("/api/faculty-assignments", genericCrud("facultyAssignments", "FA", ["Admin"]));
+app.use("/api/faculty-assignments", facultyAssignmentRoutes);
 
 app.use("/api/students", studentRoutes);
 app.use("/api/faculty", facultyRoutes);
@@ -65,7 +83,13 @@ app.use("/api/departments", genericCrud("departments", "DEP", ["Admin"]));
 app.use("/api/courses", genericCrud("courses", "C", ["Admin"]));
 app.use("/api/subjects", genericCrud("subjects", "SUB", ["Admin"]));
 app.use("/api/exams", genericCrud("exams", "EX", ["Admin", "Faculty"]));
-app.use("/api/timetable", genericCrud("timetable", "TT", ["Admin"]));
+app.use("/api/timetable", timetableRoutes);
+// Task 3 modules. Each router applies its own verifyToken + role/ownership checks.
+app.use("/api/class-teachers", classTeacherRoutes);
+app.use("/api/leave-requests", leaveRequestRoutes);
+app.use("/api/notes", noteRoutes);
+app.use("/api/call-followups", callFollowupRoutes);
+app.use("/api/internal-marks", internalMarkRoutes);
 app.use("/api/notices", genericCrud("notices", "N", ["Admin", "Faculty"]));
 app.use("/api/attendance", attendanceRoutes);
 app.use("/api/marks", marksRoutes);

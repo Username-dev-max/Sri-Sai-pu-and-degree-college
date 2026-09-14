@@ -1,4 +1,17 @@
 node_modules/
-data.json
-.env
 *.log
+
+# Secrets — use .env.example as the template.
+.env
+.env.*
+!.env.example
+
+# Runtime database (password hashes and personal records).
+data.json
+
+# Uploaded files: public uploads and PRIVATE documents/notes/leave files.
+uploads/
+private-uploads/
+
+# Development seed output.
+dev-seed-manifest.json

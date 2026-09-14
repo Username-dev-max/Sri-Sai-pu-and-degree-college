@@ -4,14 +4,19 @@
   "type": "commonjs",
   "main": "server.js",
   "scripts": {
-    "dev": "node server.js",
-    "start": "node server.js"
+    "dev": "node --env-file-if-exists=.env server.js",
+    "start": "node --env-file-if-exists=.env server.js"
+  },
+  "engines": {
+    "node": ">=22.12.0"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
-    "express": "^4.19.2",
+    "docx": "^9.7.1",
+    "express": "^4.22.3",
     "jsonwebtoken": "^9.0.2",
-    "multer": "^2.3.0"
+    "multer": "^2.3.0",
+    "pdfkit": "^0.20.2"
   }
 }

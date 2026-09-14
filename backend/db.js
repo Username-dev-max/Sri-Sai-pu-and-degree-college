@@ -237,6 +237,36 @@ function seed() {
     // Which faculty teaches which subject to which class/section/year.
     facultyAssignments: [],
 
+    // One row per class whose timetable has been published. Until a row
+    // exists and is published, timetable entries are Admin-only drafts.
+    timetablePublications: [],
+
+    /* -------------------------- Task 3 modules -------------------------- */
+
+    // Class teacher per academic year + class + section. A class teacher
+    // gains extra reach over THAT class only — never unrelated ones.
+    classTeachers: [],
+
+    // Study notes a faculty member uploads for a class/section/subject.
+    notes: [],
+
+    // Internal assessment marks: one row per student, subject and exam.
+    // Kept apart from the legacy `marks` collection, whose fixed component
+    // scheme (internal/assignment/practical/exam) doesn't fit named exams.
+    internalMarks: [],
+
+    // Student leave/absence requests, routed to the class teacher.
+    leaveRequests: [],
+
+    // Parent call follow-ups. Append-only: every call is its own record, so
+    // a later call can never overwrite what an earlier one recorded.
+    callFollowups: [],
+
+    // Server-side login sessions, one per issued token (see middleware/auth).
+    // Logout revokes a session, which is what makes a token stop working
+    // immediately instead of lingering until it expires.
+    authSessions: [],
+
     // Fee installments and receipts hang off the existing `fees` rows.
     feeInstallments: [],
     receipts: [],
@@ -417,7 +447,11 @@ function migrate(db) {
   });
 
   // Sequence counters for the collections added later.
-  const seqDefaults = { announcement: 0, notification: 0, audit: 0, enrollment: 0, document: 0, receipt: 0, installment: 0 };
+  const seqDefaults = {
+    announcement: 0, notification: 0, audit: 0, enrollment: 0,
+    document: 0, receipt: 0, installment: 0, assignment: 0, timetable: 0,
+    note: 0, internalMark: 0, classTeacher: 0, leave: 0, followup: 0,
+  };
   for (const [k, v] of Object.entries(seqDefaults)) {
     if (db.seq[k] === undefined) {
       db.seq[k] = v;
@@ -441,6 +475,139 @@ function migrate(db) {
     changed = true;
   }
 
+  /* ---------------------------------------------------------------------
+     BCA structure and teaching assignments.
+
+     This is REAL configuration supplied by the college, not demo data. It
+     is recorded once, so an Admin can change or delete any of it without it
+     reappearing on the next boot. It runs last, after the academic year is
+     guaranteed to exist, and is scoped to that year — these assignments are
+     explicitly not assumed to carry into future years.
+     --------------------------------------------------------------------- */
+  once("bca-structure-2026", () => {
+    const year = (db.academicYears || []).find((y) => y.isCurrent) || (db.academicYears || [])[0];
+    const yearId = year ? year.id : "";
+    const bca = db.courses.find((c) => (c.name || "").toLowerCase() === "bca");
+    if (!bca) return; // no BCA programme on this install — nothing to wire
+    const dept = bca.department || "DEP07";
+
+    // Only the sections the college named for BCA 1st Year. 2nd and 3rd Year
+    // run as a single class, so no section is invented for them — their
+    // assignments use an empty sectionId, meaning the whole class.
+    const ensureSection = (id, name) => {
+      if (!db.sections.some((s) => s.id === id)) db.sections.push({ id, name });
+    };
+    ensureSection("SEC_AI", "AI");
+    ensureSection("SEC_GEN", "General");
+
+    const YEAR1 = "CLS03";
+    const YEAR2 = "CLS04";
+    const YEAR3 = "CLS05";
+
+    // Subject names are recorded exactly as supplied. Each carries the class
+    // it is taught in: every BCA student shares one course, so without this
+    // a 3rd Year student would appear on a 1st Year C Programming register.
+    const BCA_SUBJECTS = [
+      ["BSUB01", "C Programming (Theory)", "CPT", YEAR1],
+      ["BSUB02", "C Programming (Lab)", "CPL", YEAR1],
+      ["BSUB03", "FOC", "FOC", YEAR1],
+      ["BSUB04", "DAA", "DAA", YEAR2],
+      ["BSUB05", "Java", "JAVA", YEAR2],
+      ["BSUB06", "Activities", "ACT", YEAR2],
+      ["BSUB07", "DBMS", "DBMS", YEAR2],
+      ["BSUB08", "Software Engineering", "SE", YEAR3],
+      ["BSUB09", "Web Development", "WD", YEAR3],
+      ["BSUB10", "Data Analysis", "DA", YEAR3],
+    ];
+    BCA_SUBJECTS.forEach(([id, name, code, classId]) => {
+      if (!db.subjects.some((s) => s.id === id)) {
+        db.subjects.push({ id, name, code, department: dept, type: "Core", courseId: bca.id, classId });
+      }
+    });
+    bca.subjects = [...new Set([...(bca.subjects || []), ...BCA_SUBJECTS.map(([id]) => id)])];
+
+    // The four faculty named in the brief, matched to their OFFICIAL roster
+    // records so the roster's own spelling is preserved.
+    const byName = (re) => db.faculty.find((f) => re.test(f.name || ""));
+    const pavitra = byName(/pavithra/i); // "K. Pavithra Ravi"
+    const praveen = byName(/^praveen$/i); // "Praveen"
+    const roy = byName(/\broy\b/i); // "Shrimati Roy M"
+    const umesh = byName(/umesh/i); // "Umesh Sir"
+
+    // Roy and Umesh had no department on file. Teaching only BCA subjects
+    // places them in BCA's department. Their designation, qualification and
+    // experience were not supplied, so those stay marked [VERIFY].
+    [roy, umesh].forEach((f) => {
+      if (f && !f.department) f.department = dept;
+    });
+
+    const assign = (fac, subjectId, classId, sectionId = "") => {
+      if (!fac) return;
+      const exists = db.facultyAssignments.some(
+        (a) =>
+          a.facultyId === fac.id && a.subjectId === subjectId && a.classId === classId &&
+          (a.sectionId || "") === sectionId && a.academicYearId === yearId
+      );
+      if (exists) return;
+      db.seq.assignment = (db.seq.assignment || 0) + 1;
+      db.facultyAssignments.push({
+        id: `FA${String(db.seq.assignment).padStart(4, "0")}`,
+        facultyId: fac.id,
+        subjectId,
+        classId,
+        sectionId,
+        academicYearId: yearId,
+        assignedBy: null,
+        assignedAt: now,
+        source: "college-configuration",
+      });
+    };
+    // Pavitra's C Programming was given per year, not per section, so it
+    // covers the whole of 1st Year. Roy's FOC was named for both sections.
+    assign(pavitra, "BSUB01", YEAR1);
+    assign(pavitra, "BSUB02", YEAR1);
+    assign(pavitra, "BSUB04", YEAR2);
+    assign(pavitra, "BSUB08", YEAR3);
+    assign(praveen, "BSUB09", YEAR3);
+    assign(praveen, "BSUB05", YEAR2);
+    assign(praveen, "BSUB06", YEAR2);
+    assign(roy, "BSUB03", YEAR1, "SEC_AI");
+    assign(roy, "BSUB03", YEAR1, "SEC_GEN");
+    assign(umesh, "BSUB07", YEAR2);
+    assign(umesh, "BSUB10", YEAR3);
+
+    // Keep each faculty record's denormalised subject/class lists in step.
+    [pavitra, praveen, roy, umesh].filter(Boolean).forEach((f) => {
+      const rows = db.facultyAssignments.filter((a) => a.facultyId === f.id);
+      f.subjects = [...new Set(rows.map((a) => a.subjectId))];
+      f.classes = [...new Set(rows.map((a) => a.classId).filter(Boolean))];
+    });
+
+    const classTeacher = (fac, classId, sectionId, label) => {
+      if (!fac) return;
+      const taken = db.classTeachers.some(
+        (t) => t.classId === classId && (t.sectionId || "") === sectionId && t.academicYearId === yearId
+      );
+      if (taken) return;
+      db.seq.classTeacher = (db.seq.classTeacher || 0) + 1;
+      db.classTeachers.push({
+        id: `CT${String(db.seq.classTeacher).padStart(4, "0")}`,
+        academicYearId: yearId,
+        courseId: bca.id,
+        classId,
+        sectionId,
+        facultyId: fac.id,
+        label,
+        assignedAt: now,
+        source: "college-configuration",
+      });
+    };
+    classTeacher(pavitra, YEAR1, "SEC_AI", "BCA 1st Year — AI");
+    classTeacher(roy, YEAR1, "SEC_GEN", "BCA 1st Year — General");
+    classTeacher(umesh, YEAR2, "", "BCA 2nd Year");
+    classTeacher(praveen, YEAR3, "", "BCA 3rd Year");
+  });
+
   return changed;
 }
 
@@ -449,7 +616,12 @@ let cache = null;
 function load() {
   if (cache) return cache;
   if (!fs.existsSync(DB_PATH)) {
+    // A brand-new install must end up identical to an upgraded one, so the
+    // migrations run here too. Without this, the very first boot had no
+    // academic year (enrollment failed), no BCA configuration and no account
+    // status fields until the backend happened to be restarted.
     cache = seed();
+    migrate(cache);
     save(cache);
   } else {
     cache = JSON.parse(fs.readFileSync(DB_PATH, "utf-8"));

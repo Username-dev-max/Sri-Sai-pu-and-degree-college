@@ -40,8 +40,8 @@ router.get("/", requireRole("Admin", "Faculty", "Attendance Staff"), (req, res) 
   // Paginate only when asked, so existing callers that expect the whole list
   // (dashboards, attendance rosters) keep working unchanged.
   if (page || pageSize) {
-    const paged = repo.paginate(list, { page, pageSize });
-    return res.json({ ...paged, students: paged.rows });
+    const { rows, meta } = repo.paginate(list, { page, pageSize });
+    return res.json({ ...meta, students: rows });
   }
   res.json({ students: list, total: list.length });
 });

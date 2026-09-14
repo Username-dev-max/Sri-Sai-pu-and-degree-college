@@ -8,7 +8,10 @@ import { motion } from "framer-motion";
 export default function Tabs({ tabs, active, onChange, layoutId = "tabs-active" }) {
   return (
     <div
-      className="inline-flex items-center gap-1 p-1 rounded-xl overflow-x-auto no-scrollbar"
+      // max-w-full matters: an inline-flex box sizes to its content, so
+      // without it `overflow-x-auto` never engages and a long tab row pushes
+      // the whole page sideways on narrow screens.
+      className="inline-flex max-w-full items-center gap-1 p-1 rounded-xl overflow-x-auto no-scrollbar"
       style={{ background: "var(--color-surface-sunken)" }}
     >
       {tabs.map((tab) => {
