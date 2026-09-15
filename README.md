@@ -221,11 +221,13 @@ own `package.json`).
 college-management-system/
 ├── README.md
 ├── .gitignore
+├── vercel.json                   Vercel Services config: /api and /uploads → backend, all else → frontend
 ├── package.json                  stray root manifest (framer-motion only) — not used by either app
 ├── database/
 │   └── schema.sql                legacy MySQL reference schema — OUT OF DATE, not used by the app
 ├── backend/                      Node.js + Express API
 │   ├── server.js                 entry point: middleware and route mounting
+│   ├── storage.js                data directory (DATA_DIR): data.json, uploads, private-uploads
 │   ├── db.js                     JSON-file persistence: seed data, migrations, load/save
 │   ├── repo.js                   table-shaped helpers over the JSON store (e.g. pagination)
 │   ├── scope.js                  who may see what: assignments, class teachers, parents
@@ -273,6 +275,8 @@ college-management-system/
 |---|---|
 | `backend/package.json` | Backend dependencies; `dev` and `start` scripts; Node version requirement |
 | `backend/server.js` | Creates the Express app, applies middleware, mounts every router, starts listening on `PORT` |
+| `vercel.json` | Vercel Services deployment: service definitions and the public routing table |
+| `backend/storage.js` | Resolves `DATA_DIR` and the database / upload locations |
 | `backend/db.js` | The database: default seed data, record migrations, `load()` and `save()` over `data.json` |
 | `backend/repo.js` | `findAll`, `findById`, `insert`, `update`, `remove`, `paginate` helpers |
 | `backend/scope.js` | Central access rules: teaching assignments, class teachers, parent links, section matching |
@@ -415,9 +419,9 @@ editing `data.json` by hand — `db.js` keeps the database in memory and does no
 
 ### Middleware order (`server.js`)
 
-1. `cors()` — currently allows **all** origins (see [CORS](#38-cors-and-production-security)).
+1. `trust proxy` and CORS — no cross-origin access unless `CORS_ORIGINS` lists origins (see [CORS](#38-cors-and-production-security)).
 2. `express.json()` — parses JSON bodies (Express's default size limit).
-3. `/uploads` — serves `backend/uploads/` as public static files.
+3. `GET /uploads/:file` — serves public uploads from `DATA_DIR/uploads/`.
 4. `GET /api/health` — health check.
 5. `Cache-Control: no-store` on every `/api` response except `/api/public/*`, so authenticated data is
    never replayed from a cache.
@@ -502,7 +506,8 @@ Password fields are redacted before anything is written to the audit log.
   hidden from everyone except Admin and the faculty member themselves.
 - Private files are never served statically; they are streamed only after an authorisation check.
 - Upload type and size limits are enforced.
-- **Not currently implemented:** rate limiting, restricted CORS, security headers (e.g. helmet).
+- CORS closed by default; `JWT_SECRET` required in production.
+- **Not currently implemented:** rate limiting, security headers (e.g. helmet).
 
 ---
 
@@ -1081,17 +1086,25 @@ Gallery photos added by an Admin are uploaded at run time to `backend/uploads/` 
 
 ## 23. Environment variables
 
-The frontend code reads **no** environment variables (`import.meta.env` is not used).
+The frontend code reads **no** environment variables (`import.meta.env` is not used). Its API base URL is
+the relative path `/api`, so no URL needs configuring per environment.
 
-### Backend (`backend/.env`)
+### Backend
 
-`npm run dev` and `npm start` load `backend/.env` automatically through Node's `--env-file-if-exists`
-flag. On a hosting platform, set these in the platform's environment settings instead.
+Template: `backend/.env.example` (names only, no values).
+
+- **Locally:** copy it to `backend/.env`. `npm run dev` and `npm start` load that file automatically
+  through Node's `--env-file-if-exists` flag.
+- **On Vercel:** set the variables in the project's environment-variable settings.
+- **On a Node server:** use `backend/.env` or the service manager's environment.
 
 | Variable | Required | Default | Used in | Purpose |
 |---|---|---|---|---|
-| `JWT_SECRET` | **Required in production** | A development secret written in the source code | `backend/middleware/auth.js` | Signs login tokens. Must be a long random value in production. |
-| `PORT` | Optional | `5000` | `backend/server.js` | Port the API listens on. Most platforms set this for you. |
+| `JWT_SECRET` | **Required in production** | A development secret in the source code | `backend/middleware/auth.js` | Signs login tokens. When `NODE_ENV=production` and it is missing, the backend **refuses to start**. |
+| `NODE_ENV` | Set by most hosts | — | `backend/middleware/auth.js` | `production` makes `JWT_SECRET` mandatory |
+| `PORT` | Optional | `5000` | `backend/server.js` | Port to listen on when started with `npm start`. Hosts usually set it. |
+| `DATA_DIR` | Optional | the `backend` folder | `backend/storage.js` | Directory holding `data.json`, `uploads/` and `private-uploads/`. Point it at a persistent, backed-up disk in production. |
+| `CORS_ORIGINS` | Optional | empty | `backend/server.js` | Comma-separated origins allowed to call the API cross-origin. Leave empty when the frontend and API share a domain. |
 
 Generate a secret with:
 
@@ -1109,8 +1122,7 @@ in the shell when you run it.
 | `API` | Optional | `http://localhost:5000/api` | Backend the seed script talks to |
 | `DEV_SEED_CREDENTIALS_OUT` | Optional | — | File path, **outside the project**, to save the generated temporary passwords |
 
-The template is `backend/.env.example`. **Never** put real secret values in the README, in
-`.env.example`, or in any committed file.
+**Never** put real secret values in the README, in `.env.example`, or in any committed file.
 
 ---
 
@@ -1173,13 +1185,17 @@ node scripts/dev-seed.mjs
 
 ### Seed accounts created on a fresh install (`backend/db.js`)
 
-| Role | Username | Password |
-|---|---|---|
-| Admin | `admin` | `Admin@123` |
-| Faculty | `shashi.pv` | `Faculty@123` |
-| Attendance Staff | `attendance.staff` | `Staff@123` |
-| Student | `demo.student` | `Student@123` |
-| Parent | `demo.parent` | `Parent@123` |
+| Role | Username |
+|---|---|
+| Admin | `admin` |
+| Faculty | `shashi.pv` |
+| Attendance Staff | `attendance.staff` |
+| Student | `demo.student` |
+| Parent | `demo.parent` |
+
+Their initial passwords are defined in `seed()` in `backend/db.js` and are deliberately not repeated here.
+Anyone with access to the repository can read them, so change the admin password and deactivate these
+accounts before real use.
 
 The seed also contains the college's real public data: departments, the faculty roster, courses and
 combinations, sports achievements, academic merit lists and the college profile. It includes one
@@ -1198,8 +1214,8 @@ Creates clearly fictional records **through the real API**, so everything passes
   leave request.
 
 It prints random **temporary** passwords, which must be changed at first sign-in, and writes the created
-record ids (never passwords) to `backend/dev-seed-manifest.json`. It signs in as `admin` / `Admin@123`,
-so it fails if that password has been changed. Running it again reuses existing records instead of
+record ids (never passwords) to `backend/dev-seed-manifest.json`. It signs in with the seed Admin
+account's initial password, so it fails if that password has been changed. Running it again reuses existing records instead of
 duplicating them.
 
 **Removing demo data:** there is no automated clean-up script. Use the manifest and the Admin screens:
@@ -1298,9 +1314,12 @@ The root `.gitignore` (with `backend/.gitignore` and `frontend/.gitignore`) excl
 | `backend/uploads/` | Uploaded files (runtime data) |
 | `backend/private-uploads/` | Private student documents, notes and leave documents |
 | `backend/dev-seed-manifest.json` | Ids of demo records |
+| `.vercel/` | Vercel CLI project link and local build output |
+| `*.pem`, `*.key`, `*.p12`, `*credentials*.json` | Private keys, certificates and credential exports |
+| `tmp/`, `temp/`, `*.tmp` | Temporary files |
 | `.claude/settings.local.json`, `.claude/scheduled_tasks.lock` | Machine-specific tool settings |
 
-**Kept in Git because deployment needs them:** all source code, `package.json` and `package-lock.json`
+**Kept in Git because deployment needs them:** `vercel.json`, all source code, `package.json` and `package-lock.json`
 files, `backend/.env.example`, `frontend/public/` (including the college logo and photographs),
 `database/schema.sql`, and `backend/scripts/dev-seed.mjs`.
 
@@ -1327,67 +1346,124 @@ student documents, fee records, receipts, or faculty salary information.
 
 ## 31. Deployment architecture
 
-### What the current code requires
+### Deployment platform
 
-| Requirement | Reason |
-|---|---|
-| A **long-running Node.js process** | Express server with in-memory database cache |
-| A **persistent disk** | `backend/data.json`, `backend/uploads/` and `backend/private-uploads/` are written to the local filesystem |
-| **Exactly one instance** | Each instance holds its own in-memory copy of the database; several would overwrite each other |
-| Paths **relative to the backend folder** | Data and upload locations are fixed in the code, not configurable |
+The repository had no deployment configuration. The target configuration for this project uses
+**Vercel Services**: several services in one Vercel project, sharing one domain and one routing table.
+It is defined in **`vercel.json` at the repository root**:
 
-**Serverless platforms, including Vercel Functions, cannot run this backend as it is written**: their
-filesystem does not persist and the in-memory cache would not be shared. The backend has not been
-adapted for serverless.
-
-### Recommended architecture
-
-| Part | Recommendation |
-|---|---|
-| Frontend hosting | **Vercel** — static hosting of `frontend/dist/` |
-| Backend hosting | A **Linux virtual server (VPS)** running Node.js — works with the current code without changes. A platform offering a Node web service with an attached persistent volume is possible only after data and upload paths are made configurable. |
-| Production database | `backend/data.json` on the backend server's persistent disk |
-| File storage | `backend/uploads/` and `backend/private-uploads/` on the same persistent disk, backed up |
-| Domain | Registered with any registrar; DNS pointed at Vercel |
-| HTTPS | Automatic on Vercel for the frontend; configured on the server for the backend |
-
-```
-Browser ──HTTPS──▶ Vercel (frontend/dist)
-                     │  rewrites /api/* and /uploads/*
-                     ▼
-                   HTTPS reverse proxy on the backend server
-                     ▼
-                   Node.js: npm start (single instance)
-                     ▼
-                   Persistent disk: data.json · uploads/ · private-uploads/
+```json
+{
+  "services": {
+    "frontend": {
+      "root": "frontend/",
+      "framework": "vite",
+      "rewrites": [
+        { "source": "/(.*)", "destination": "/index.html" }
+      ]
+    },
+    "backend": {
+      "root": "backend/",
+      "framework": "express",
+      "entrypoint": "server.js"
+    }
+  },
+  "rewrites": [
+    { "source": "/api(/.*)?", "destination": { "service": "backend" } },
+    { "source": "/uploads/(.*)", "destination": { "service": "backend" } },
+    { "source": "/(.*)", "destination": { "service": "frontend" } }
+  ]
+}
 ```
 
-### Deployment blockers and required actions
+How this differs from the draft configuration, and why:
 
-| # | Issue | Action before going live |
+| Change | Reason |
+|---|---|
+| `"type": "service"` removed from destinations | Vercel's documented destination object accepts only `service` and `path` |
+| Backend `framework: "express"` and `entrypoint: "server.js"` | The backend is Express, and `server.js` is its entry file. It exports the app for Vercel and still listens on `PORT` when started with `npm start`. |
+| `/uploads/(.*)` routed to the backend | Uploaded images are stored and served by the backend at `/uploads/<file>`. Without this rule the frontend catch-all would swallow them. |
+| Frontend service `rewrites` to `/index.html` | React Router needs deep links such as `/admin` to load the app. Vercel serves real static files first, so assets are unaffected. |
+
+### Routing
+
+Top-level rewrites are evaluated **in order**; the first match wins and routing into a service is final.
+
+| Request | Goes to | Why |
 |---|---|---|
-| 1 | Storage paths are fixed in code | Use a host where the backend folder itself is on persistent storage (a VPS), or first make the paths configurable |
-| 2 | Single-instance database | Run one backend instance; do not enable autoscaling |
-| 3 | `JWT_SECRET` falls back to a development secret | Set a strong secret |
-| 4 | CORS allows every origin | Restrict origins (a code change) or rely on same-origin rewrites |
-| 5 | No login rate limiting | Add rate limiting (a code change) or limit requests at the reverse proxy |
-| 6 | Seed accounts with public passwords exist on first run | Change the admin password immediately; deactivate the demo accounts |
-| 7 | Express `trust proxy` is not set | Behind a proxy, audit logs and sessions record the proxy's IP address |
-| 8 | Faculty can read every student record and non-identity document | Security follow-up (a code change) |
-| 9 | Announcement attachments and gallery uploads are public by URL | Do not upload private files through those screens |
-| 10 | A development database contains demo data | Start production from a fresh database, never a development copy |
+| `/api`, `/api/auth/login`, `/api/students`, `/api/attendance`, `/api/fees`, `/api/notifications` … | backend | `/api(/.*)?` is listed first |
+| `/uploads/img-….jpeg` | backend | public uploaded files |
+| `/`, `/login`, `/admin`, `/student`, `/parent`, `/gallery`, `/about` … | frontend | catch-all, then the SPA fallback |
+| `/campus/logo.png`, `/assets/*.js` | frontend | real files in the Vite build |
+| An unknown `/api/...` path | backend | JSON `404` — never the SPA page |
+
+The backend receives the **original path** (`/api/students`, not `/students`), which matches how
+`server.js` mounts its routes. Browser code calls the relative `/api`, so frontend and API are
+**same-origin** and need no CORS.
+
+### ⚠️ Blocker: storage on Vercel Functions
+
+On Vercel, the Express backend runs as a **Vercel Function on Fluid compute**. This project stores its
+database and uploads on the local disk. That does not work there:
+
+| Platform behaviour (Vercel docs) | Effect on this project |
+|---|---|
+| Function filesystem is **read-only**; only `/tmp` is writable, and `/tmp` does not persist | `data.json` cannot be created or saved. Every API call that loads or writes the database fails — including the homepage data, **login** (which records the session and last-login time) and all admin changes. |
+| Several instances can serve traffic; shared state belongs in an external store | Each instance would hold its own in-memory copy of the database |
+| Request body limit **4.5 MB** | Uploads above 4.5 MB fail, although the app allows up to 8, 12 and 20 MB |
+| `express.static()` is ignored | Handled: `/uploads/<file>` is now an ordinary route |
+
+**Result:** with the current storage code, the Vercel deployment **builds and routes correctly, but
+cannot run the application**. Setting `DATA_DIR=/tmp` would only look like it works: data would vanish
+between instances and restarts. Never do that in production.
+
+Two ways forward:
+
+| Option | What it takes | Code changes |
+|---|---|---|
+| **A. Stay fully on Vercel** | Move the database from `data.json` to a hosted database, and uploads to object storage (for example Vercel Blob), keeping private files behind the existing authorisation routes | **Required — not currently implemented.** `db.js`, `repo.js` and every upload/download route |
+| **B. Frontend on Vercel, backend on a Node host with a persistent disk** | A server or platform that runs `npm start` as **one** long-running process with a persistent disk or volume (`DATA_DIR`) | None beyond this release. Uses a frontend-only Vercel config (section 32) instead of the root `vercel.json`. |
+
+### Remaining deployment issues
+
+| # | Issue | Action |
+|---|---|---|
+| 1 | Local-disk database and uploads (above) | Choose option A or B before going live |
+| 2 | Single-instance database | On option B run exactly one backend instance, with no autoscaling |
+| 3 | No login rate limiting | Add rate limiting (a code change) or limit at the proxy/firewall |
+| 4 | Seed accounts with public passwords exist on first run | Change the admin password immediately; deactivate demo accounts |
+| 5 | Faculty can read every student record and non-identity document | Security follow-up (a code change) |
+| 6 | Announcement attachments and gallery uploads are public by URL | Do not upload private files through those screens |
+| 7 | The development database contains demo data | Start production from a fresh database, never a development copy |
+| 8 | `vercel dev` on Windows cannot start the frontend service (the CLI runs `vite --port $PORT`, which `cmd.exe` does not expand) | Develop locally with `npm run dev` in `frontend` and `backend` |
+
+Fixed in this release: storage paths are configurable (`DATA_DIR`), CORS no longer allows every origin,
+`JWT_SECRET` is enforced in production, Express trusts the proxy's forwarded client IP, and the backend
+exports its app for platforms that import it.
 
 ---
 
 ## 32. Frontend deployment on Vercel
 
-The frontend calls the API through the **relative** path `/api`, and React Router needs every page URL to
-return `index.html`. Vercel must therefore **rewrite** requests. The repository **does not contain a
-`vercel.json` yet**; add one before deploying.
+### Option A — Vercel Services (root `vercel.json`)
 
-### 1. Add `frontend/vercel.json`
+Blocked until storage is moved (section 31). The dashboard steps are:
 
-Replace `<YOUR-BACKEND-HOST>` with the real HTTPS address of the backend server:
+1. Push the repository to GitHub.
+2. In Vercel, create a new project and **import the GitHub repository**.
+3. Leave **Root Directory** at the repository root. Vercel must read the root `vercel.json`, which defines
+   both services. Do **not** set it to `frontend` or `backend`.
+4. Services may need to be enabled for your Vercel team — the Services documentation marks it as a
+   permission-gated feature. Confirm in the dashboard.
+5. Build settings come from `vercel.json` per service: the `frontend` service is detected as Vite
+   (`npm install`, `npm run build`, output `dist`), and `backend` as Express.
+6. Under **Environment Variables**, add `JWT_SECRET` (a long random value).
+7. Deploy, then check the URLs in [section 43](#43-deployment-checklist).
+
+### Option B — frontend only on Vercel, backend elsewhere
+
+Create a Vercel project with **Root Directory `frontend`**. With this option the root `vercel.json` is not
+used. Add `frontend/vercel.json`, replacing `<YOUR-BACKEND-HOST>` with the backend's real HTTPS address:
 
 ```json
 {
@@ -1399,114 +1475,104 @@ Replace `<YOUR-BACKEND-HOST>` with the real HTTPS address of the backend server:
 }
 ```
 
-Because the browser only ever talks to the Vercel domain, API calls are same-origin.
+| Setting | Value (from `frontend/package.json`) |
+|---|---|
+| Framework preset | Vite |
+| Install command | `npm install` |
+| Build command | `npm run build` (runs `vite build`) |
+| Output directory | `dist` |
+| Environment variables | none |
 
-> Check Vercel's current request-size limits for rewritten requests. File uploads of up to 20 MB pass
-> through these rewrites, and a lower platform limit would make large uploads fail.
-
-### 2. Deploy
-
-1. Push the project to GitHub.
-2. Sign in to Vercel and choose to add a new project.
-3. Import the GitHub repository.
-4. Set **Root Directory** to `frontend`.
-5. **Framework preset:** Vite.
-6. **Build command:** `npm run build`
-7. **Output directory:** `dist`
-8. **Install command:** `npm install`
-9. **Environment variables:** none — the frontend code reads none.
-10. Deploy.
-11. Test the production site: the home page loads data, each of the five roles can log in and out, a page
-    refresh on `/admin` still works, and uploaded images display.
+The browser still talks only to the Vercel domain, so API calls stay same-origin.
 
 ---
 
 ## 33. Backend deployment
 
-This walkthrough uses a **Linux VPS**, which runs the current code unchanged.
-
-| Setting | Value |
+| Fact | Value |
 |---|---|
-| Repository | Your GitHub repository |
-| Root directory | `backend` |
-| Install / build command | `npm install` (there is no build step) |
-| Start command | `npm start` |
-| Node.js version | 22.12 or newer (`engines` in `backend/package.json`) |
-| Environment variables | `JWT_SECRET` (required), `PORT` (optional) |
+| Framework | Express 4 |
+| Entry file | `backend/server.js` (exports the app; listens when run directly) |
+| Start command | `npm start` → `node --env-file-if-exists=.env server.js` |
+| Build step | none |
+| API base path | `/api` (public uploads at `/uploads`) |
+| Port | `process.env.PORT`, default `5000` |
+| Node.js | `>=22.12.0` (`engines` in `backend/package.json`) |
 | Health check | `GET /api/health` |
-| Instances | **Exactly 1** |
 
-### Steps
+### Option A — `backend` service on Vercel
 
-1. Create a Linux server and install Node.js 22.12 or newer and Git.
-2. Clone the repository and install the backend:
+Configured by the root `vercel.json`. Vercel imports `server.js` as a function, so `npm start` is not
+used. **It cannot persist data** (section 31).
+
+### Option B — Node host with a persistent disk
+
+Works with the current code. This walkthrough uses a Linux server:
+
+1. Install Node.js 22.12 or newer and Git.
+2. Clone and install:
    ```bash
    git clone <GITHUB_REPOSITORY_URL>
    cd <repository-folder>/backend
    npm install
    ```
-3. Create `backend/.env` from `backend/.env.example` and set `JWT_SECRET`.
-4. Run `npm start` under a process manager that restarts it on crashes and reboots (for example a
-   systemd service).
-5. Put a reverse proxy with HTTPS in front of it (for example Nginx or Caddy), forwarding to the local
-   `PORT`.
+3. Create `backend/.env` from `backend/.env.example`. Set `JWT_SECRET` and `NODE_ENV=production`, and set
+   `DATA_DIR` to a directory **outside** the cloned repository (for example on a mounted data disk), so a
+   redeploy never deletes the database or uploads.
+4. Run `npm start` under a process manager that restarts it after crashes and reboots (for example a
+   systemd service). Run **one** instance.
+5. Put an HTTPS reverse proxy (for example Nginx or Caddy) in front of it, forwarding to `PORT`.
 6. Allow only ports 80 and 443 through the firewall; keep the Node port private.
-7. Sign in as `admin` immediately, change the password, and deactivate the demo accounts.
-8. Set up backups (see [Database production setup](#34-database-production-setup)).
+7. Sign in as `admin`, change the password, and deactivate demo accounts.
+8. Schedule backups of `DATA_DIR` (section 34).
 
-### CORS
-
-With the Vercel rewrites above, the browser never calls the backend cross-origin. The server still
-answers `Access-Control-Allow-Origin: *` today; restricting it is covered in
-[CORS and production security](#38-cors-and-production-security).
-
-### Database and files
-
-The database and uploads are written inside the `backend` folder on the server's disk. They persist
-across restarts, but **a redeploy that deletes and re-clones the folder would erase them** — keep
-`data.json`, `uploads/` and `private-uploads/` outside anything your deployment process deletes, and back
-them up.
+A managed platform can be used instead of a server if it runs a long-lived Node process with a
+**persistent volume** mounted at `DATA_DIR` and a single instance.
 
 ---
 
 ## 34. Database production setup
 
-- **Creation:** there is no separate database to create. On first start the backend writes
-  `backend/data.json` from the seed data and applies the migrations.
-- **Schema and migrations:** automatic on every start (see [Database](#8-database)). There is no
-  migration command.
-- **Connection and SSL:** not applicable — there is no network connection to a database.
-- **Credentials:** none. Protect the **file** instead: readable only by the account that runs the
-  backend, never inside a publicly served directory.
+- **Technology:** a JSON file, `data.json`, in `DATA_DIR`. There is no database server, connection
+  string or credentials.
+- **Creation and migrations:** automatic. On first start the backend writes `data.json` from the seed data
+  and applies the migrations.
+- **Vercel Functions:** not supported. The file cannot be written there, and a hosted database would
+  require rewriting `db.js` and `repo.js` (**not currently implemented**).
+- **Persistent host (option B):** keep `DATA_DIR` on a persistent disk, readable only by the account running
+  the backend, never inside a web-served directory.
 - **Initial data:** start from a fresh file. Do not copy a development `data.json`.
-- **Backups:**
-  - Copy `data.json` together with `uploads/` and `private-uploads/` on a schedule to storage off the
-    server.
-  - `save()` rewrites the whole file, so for a guaranteed-consistent copy, briefly stop the backend or
-    copy during a quiet period.
-  - Keep several dated copies and **test restoring one**.
-- **Moving to a relational database:** Not currently implemented. `database/schema.sql` is out of date,
-  and routes read and write the JSON store directly, so a migration would be a significant change.
+- **Backups:** copy `data.json` together with `uploads/` and `private-uploads/` on a schedule to storage off
+  the server. `save()` rewrites the whole file, so for a guaranteed-consistent copy briefly stop the backend
+  or copy during a quiet period. Keep dated copies and **test a restore**.
 
 ---
 
 ## 35. File storage in production
 
-| Question | Current implementation |
-|---|---|
-| Where are files stored? | The **local filesystem** of the backend server: `backend/uploads/` and `backend/private-uploads/` (with `notes/` and `leave/` subfolders) |
-| Database or cloud storage? | Neither. No object storage integration exists. |
-| Are private files protected? | Yes — `private-uploads/` is never served statically; files are streamed only after an authorisation check |
-| Are public uploads protected? | No — `uploads/` is served at `/uploads/<file>` to anyone with the URL |
+All uploads are written to the local filesystem under `DATA_DIR`.
 
-**Requirements for production:**
+| Kind | What | Stored in | Served |
+|---|---|---|---|
+| **Public** — college branding | Logo and campus photographs | `frontend/public/campus/` (committed; deployed with the frontend) | Static files |
+| **Public** — uploads | Gallery images, team member photos, announcement attachments | `DATA_DIR/uploads/` | `GET /uploads/<file>` — anyone with the URL |
+| **Private** | Student documents, published timetable PDFs | `DATA_DIR/private-uploads/` | Only through authorised API routes |
+| **Private** | Study notes | `DATA_DIR/private-uploads/notes/` | `GET /api/notes/:id/file` after checks |
+| **Private** | Leave supporting documents | `DATA_DIR/private-uploads/leave/` | `GET /api/leave-requests/:id/document` after checks |
 
-1. The disk must be **persistent**. On platforms whose filesystem is ephemeral, every uploaded document
-   would be **lost** on restart or redeploy. Do not deploy there without first moving uploads to
-   persistent storage — a change that is **Not currently implemented**.
-2. Back up `private-uploads/` with the database. Files and records must be restored together.
+Not stored as files: fee receipts are generated records in the database. Faculty documents have API support
+but no upload screen. Salary documents do not exist (**not currently implemented**).
+
+`private-uploads/` is never served statically, and the `/uploads` route resolves only a bare file name
+inside `uploads/`, so it cannot reach the database or private files (verified).
+
+**Production requirements:**
+
+1. **Persistent storage.** Vercel Functions cannot keep uploaded files. Use option B, or move files to
+   object storage (a code change). Public and private files must stay separated.
+2. **Back up `private-uploads/` with the database** — records and files must be restored together.
 3. Restrict filesystem permissions to the account running the backend.
-4. Never configure a web server to serve `private-uploads/` directly.
+4. Never configure a web server or CDN to serve `private-uploads/` directly.
 
 ---
 
@@ -1529,10 +1595,10 @@ apply to the **frontend on Vercel**.
 10. **Test** on desktop and mobile: both `http://` and `https://`, with and without `www`, the home page,
     login for each role, and a page refresh on a deep link such as `/admin`.
 
-**Backend domain:** with the rewrites in section 32, the backend does not need a public custom domain.
-If you want one (for example `api.<college-domain>.com`), create the DNS record your **backend server or
-provider** documents — typically an A record pointing at the server's IP address — and issue a
-certificate on the server. Then update the rewrite destinations in `vercel.json`.
+**Backend domain:** with Vercel Services the site and the API share one domain, so the backend needs no
+domain of its own. Only a backend on a separate server (option B, section 33) needs an address such as
+`api.<college-domain>.com`, created with the DNS record your server provider documents, and referenced in
+`frontend/vercel.json`.
 
 ---
 
@@ -1558,19 +1624,29 @@ itself **does not send email** today.
 
 ### Current configuration
 
-`backend/server.js` calls `app.use(cors())`, which sends `Access-Control-Allow-Origin: *`. **Any website**
-may call the API from a browser.
+`backend/server.js` sends **no CORS headers by default**. The frontend calls the API through the same
+origin: the Vite proxy in development, and the host's `/api` rewrite in production. So no cross-origin
+permission is needed, and no other website can call the authenticated API from a browser.
 
-### Recommended production configuration
+If a different site genuinely needs to call the API, list its exact origins in `CORS_ORIGINS`:
 
-| Environment | Allowed origin |
+```
+CORS_ORIGINS=https://www.example-college-domain.com,https://admin.example-college-domain.com
+```
+
+Only those origins receive `Access-Control-Allow-Origin`. The wildcard `*` is never used.
+
+| Setup | `CORS_ORIGINS` |
 |---|---|
-| Development | Not needed — Vite proxies requests, so they are same-origin |
-| Production with Vercel rewrites | Not needed — requests are same-origin |
-| Production calling the backend directly | Only the official frontend origin, e.g. `https://www.<college-domain>.com` |
+| Local development (Vite proxy) | empty |
+| Vercel Services (one domain) | empty |
+| Frontend on Vercel rewriting to a separate backend (option B) | empty — the browser still sees one origin |
+| A browser app on another domain calling the API directly | that app's origin |
 
-Restricting origins requires a code change (for example `cors({ origin: [...] })`), which is **Not
-currently implemented**. Do not keep `*` in production for this authenticated API.
+### Proxy and client IP
+
+`app.set("trust proxy", 1)` takes the client address from the first `X-Forwarded-For` hop, so audit logs
+and sessions record the real client rather than the proxy. It assumes one proxy in front of the backend.
 
 ### Tokens and cookies
 
@@ -1588,9 +1664,9 @@ transit.
 
 | Part | How |
 |---|---|
-| Frontend | Automatic on Vercel, including certificate renewal and HTTP → HTTPS redirects |
-| Backend | A TLS certificate on the server's reverse proxy (for example Caddy obtains one automatically; Nginx can use Let's Encrypt) |
-| Frontend → backend | The `vercel.json` rewrite destinations must use `https://` |
+| Vercel (frontend, and the backend service in option A) | Automatic, including certificate renewal and HTTP → HTTPS redirects |
+| Backend on a Node host (option B) | A TLS certificate on its reverse proxy (for example Caddy obtains one automatically; Nginx can use Let's Encrypt) |
+| Vercel → separate backend (option B) | Rewrite destinations in `frontend/vercel.json` must use `https://` |
 | Secure cookies | Not applicable — no cookies are used |
 
 ---
@@ -1602,9 +1678,10 @@ Status notes describe the **current code**.
 - [ ] **No secrets in Git** — `.gitignore` protects `.env` and `data.json`; review history before going public
 - [ ] **Production database file protected** — file permissions set; not inside a served directory
 - [x] **Passwords hashed** — bcrypt; never stored in plain text
-- [ ] **`JWT_SECRET` changed** — must be set; the code falls back to a development secret
+- [x] **`JWT_SECRET` enforced** — the backend refuses to start in production without it; set a strong value
+- [ ] **Persistent storage** — ⚠️ `data.json` and uploads need a persistent disk; Vercel Functions have none (section 31)
 - [ ] **HTTPS enabled** — frontend (Vercel) and backend (reverse proxy)
-- [ ] **CORS restricted** — ⚠️ currently allows all origins
+- [x] **CORS restricted** — no cross-origin access unless `CORS_ORIGINS` is set
 - [x] **Authentication enforced** — server-side sessions, revoked at logout
 - [x] **Backend authorization enforced** — role checks on every protected route
 - [x] **Student ownership checks** — students reach only their own records
@@ -1692,14 +1769,18 @@ Run these with the development accounts ([section 25](#25-development-data)) bef
 | Upload refused | Wrong file type or file too large | See the limits in [File uploads](#21-file-uploads) |
 | Faculty sees "No subjects assigned to you" | No teaching assignment for that faculty member | Admin → **Teaching Assignments** |
 | Dashboard figures are all zero | Empty database — figures are counted, never invented | Add real records, or run the dev seed locally |
-| CORS error in the browser console | The frontend is calling the backend on a different origin | Use the Vercel rewrites so requests are same-origin |
-| On Vercel, refreshing `/admin` shows 404 | Missing single-page-app rewrite | Add the `"/(.*)" → "/index.html"` rewrite in `frontend/vercel.json` |
-| On Vercel, all API calls return 404 or HTML | Missing or wrong `/api` rewrite, or wrong backend URL | Check the rewrite destinations in `vercel.json` |
-| Vercel build fails | Wrong root directory or output directory | Root Directory `frontend`, output directory `dist` |
+| CORS error in the browser console | A page on another origin is calling the API | Serve both on one domain through `vercel.json`, or add that origin to `CORS_ORIGINS` |
+| On Vercel, refreshing `/admin` shows 404 | Missing single-page-app fallback | Keep the frontend service's `/(.*)` → `/index.html` rewrite in `vercel.json` |
+| On Vercel, API calls return the HTML page | The `/api` rule is missing or listed after the catch-all | `/api(/.*)?` must come before `/(.*)` in the top-level `rewrites` |
+| Vercel ignores the services | Project Root Directory set to `frontend` or `backend` | Leave Root Directory at the repository root so Vercel reads `vercel.json` |
 | Data or uploads disappeared after a redeploy | Ephemeral filesystem, or the deploy recreated the backend folder | Use a persistent disk and keep data outside deleted folders; restore from backup |
 | Large uploads fail in production | A request-size limit at Vercel or the reverse proxy | Raise the proxy's limit; check Vercel's limits for rewrites |
 | No browser notification pop-ups | Not implemented — notifications are in-app only | Use the bell icon |
 | Custom domain not verifying | DNS records wrong or still propagating | Copy the exact records from Vercel's domain settings; allow time to propagate |
+| Every API call returns 500 on Vercel; logs show a read-only file system error | `data.json` cannot be written on Vercel Functions | Storage blocker — see section 31 |
+| Uploads over 4.5 MB fail on Vercel with 413 | Vercel Functions request body limit | Keep files under 4.5 MB or use option B |
+| Backend exits: `JWT_SECRET must be set when NODE_ENV=production` | Secret missing | Set `JWT_SECRET` in the host's environment |
+| `vercel dev` on Windows: frontend exited before port was available | The CLI runs `vite --port $PORT`, which `cmd.exe` does not expand | Use `npm run dev` in `frontend` and `backend` |
 
 ---
 
@@ -1725,7 +1806,8 @@ Run these with the development accounts ([section 25](#25-development-data)) bef
 - [ ] Backend server provisioned with a persistent disk
 - [ ] Backend deployed and running as a single instance
 - [ ] `JWT_SECRET` set
-- [ ] Frontend deployed on Vercel with `vercel.json` rewrites
+- [ ] Storage decision made (section 31): hosted database/object storage, or backend with a persistent disk
+- [ ] Deployed on Vercel with the root `vercel.json`, or frontend-only with `frontend/vercel.json` (option B)
 - [ ] CORS reviewed ([section 38](#38-cors-and-production-security))
 - [ ] File storage persistent and backed up
 - [ ] HTTPS working for frontend and backend
@@ -2055,8 +2137,8 @@ All paths are relative to the backend, e.g. `http://localhost:5000`. **Auth** me
 - Deleting login accounts (deactivation only)
 - An automated demo-data clean-up
 - Automated tests
-- Rate limiting, restricted CORS and security headers
-- Configurable data and upload locations; a relational database; cloud file storage
+- Rate limiting and security headers
+- A hosted database and cloud file storage — required to run the backend on Vercel Functions
 
 ### Known issues
 
@@ -2098,6 +2180,7 @@ not release numbers.
 - Development tooling: `backend/scripts/dev-seed.mjs`, `backend/.env.example`, stronger `.gitignore`
 - Dependency update: Express 4.22.3, resolving two moderate `qs` advisories
 - First run now applies migrations immediately
+- Deployment: root `vercel.json` (Vercel Services), configurable `DATA_DIR`, CORS closed by default (`CORS_ORIGINS`), `JWT_SECRET` enforced in production, `trust proxy`, exported Express app
 
 ---
 
@@ -2194,10 +2277,10 @@ Sri Sai PU and Degree College Website
 | Developer Machine | Node.js 22.12+; `npm run dev` in `backend` and `frontend` |
 | Git | Commit source only — never `.env`, `data.json` or uploads |
 | GitHub | Private repository; untrack previously committed files |
-| Frontend Hosting | Vercel · root `frontend` · build `npm run build` · output `dist` · `vercel.json` rewrites to the backend |
-| Backend Hosting | Linux server · `npm start` · single instance · `JWT_SECRET` set · reverse proxy |
-| Production Database | `backend/data.json` on the server's persistent disk, backed up off-server |
-| Secure File Storage | `backend/uploads/` and `backend/private-uploads/` on persistent disk; private files never served statically |
+| Frontend Hosting | Vercel · `frontend` service (Vite) · `npm run build` → `dist` · SPA fallback |
+| Backend Hosting | `backend` service behind `/api` once storage is moved, or a Node host with a persistent disk (`npm start`, `DATA_DIR`, one instance) |
+| Production Database | `data.json` in `DATA_DIR` on persistent storage, backed up off-server (not possible on Vercel Functions) |
+| Secure File Storage | `DATA_DIR/uploads/` (public) and `DATA_DIR/private-uploads/` (private, authorised routes only) on persistent storage |
 | Custom Domain | Registrar → DNS records shown by Vercel → root and `www` |
 | HTTPS | Automatic on Vercel; TLS certificate on the backend's reverse proxy |
 | Website | Sri Sai PU and Degree College — public site and five-role management portal |

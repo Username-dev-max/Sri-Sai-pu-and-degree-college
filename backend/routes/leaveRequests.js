@@ -23,8 +23,9 @@ router.use(verifyToken);
 // Supporting documents (a medical certificate, say) are private: they live
 // outside the statically served uploads directory and are streamed only
 // through GET /:id/document after an authorisation check.
-const DIR = path.join(__dirname, "..", "private-uploads", "leave");
-if (!fs.existsSync(DIR)) fs.mkdirSync(DIR, { recursive: true });
+const { PRIVATE_DIR, ensureDir } = require("../storage");
+const DIR = path.join(PRIVATE_DIR, "leave");
+ensureDir(DIR);
 const ALLOWED = new Set([".pdf", ".png", ".jpg", ".jpeg"]);
 const upload = multer({
   storage: multer.diskStorage({

@@ -17,7 +17,7 @@ const { audit, notify, linkedChildIds } = require("../services");
 const router = express.Router();
 router.use(verifyToken);
 
-const PRIVATE_DIR = path.join(__dirname, "..", "private-uploads");
+const { PRIVATE_DIR } = require("../storage");
 
 /** Who may see this document? */
 function canRead(doc, user, db) {

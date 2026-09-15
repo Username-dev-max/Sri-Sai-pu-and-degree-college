@@ -8,7 +8,8 @@
 const fs = require("fs");
 const path = require("path");
 
-const DB_PATH = path.join(__dirname, "data.json");
+// Location comes from storage.js (DATA_DIR), defaulting to this folder.
+const { DB_PATH } = require("./storage");
 
 function seed() {
   return {

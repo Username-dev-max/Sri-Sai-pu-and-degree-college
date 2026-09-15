@@ -4,8 +4,8 @@ const path = require("path");
 const fs = require("fs");
 const { verifyToken, requireRole } = require("../middleware/auth");
 
-const UPLOAD_DIR = path.join(__dirname, "..", "uploads");
-if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+const { UPLOAD_DIR, PRIVATE_DIR, ensureDir } = require("../storage");
+ensureDir(UPLOAD_DIR);
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, UPLOAD_DIR),
@@ -45,8 +45,7 @@ router.post("/", (req, res) => {
    caller's identity first. The returned `storedName` is an opaque handle,
    not a URL.
    ------------------------------------------------------------------------ */
-const PRIVATE_DIR = path.join(__dirname, "..", "private-uploads");
-if (!fs.existsSync(PRIVATE_DIR)) fs.mkdirSync(PRIVATE_DIR, { recursive: true });
+ensureDir(PRIVATE_DIR);
 
 const PRIVATE_ALLOWED = new Set([".png", ".jpg", ".jpeg", ".webp", ".pdf"]);
 const privateUpload = multer({

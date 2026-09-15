@@ -19,8 +19,9 @@ router.use(verifyToken);
 
 // Stored outside the statically served uploads directory; served only
 // through GET /:id/file after an authorisation check.
-const DIR = path.join(__dirname, "..", "private-uploads", "notes");
-if (!fs.existsSync(DIR)) fs.mkdirSync(DIR, { recursive: true });
+const { PRIVATE_DIR, ensureDir } = require("../storage");
+const DIR = path.join(PRIVATE_DIR, "notes");
+ensureDir(DIR);
 
 const TYPES = {
   ".pdf": "application/pdf",

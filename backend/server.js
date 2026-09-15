@@ -30,10 +30,34 @@ const internalMarkRoutes = require("./routes/internalMarks");
 const { verifyToken } = require("./middleware/auth");
 const path = require("path");
 
+const { UPLOAD_DIR } = require("./storage");
+
 const app = express();
-app.use(cors());
+
+// Behind a reverse proxy / hosting router, take the client IP from the first
+// X-Forwarded-For hop so audit logs and sessions record the real address.
+app.set("trust proxy", 1);
+
+// CORS. The frontend calls the API through the same origin (/api via the Vite
+// proxy locally, or the host's rewrites in production), so no cross-origin
+// access is needed and none is granted by default. List extra origins in
+// CORS_ORIGINS (comma-separated) only if a different site must call the API.
+const corsOrigins = (process.env.CORS_ORIGINS || "")
+  .split(",")
+  .map((o) => o.trim())
+  .filter(Boolean);
+if (corsOrigins.length) app.use(cors({ origin: corsOrigins }));
+
 app.use(express.json());
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+
+// Public uploads. A route handler rather than express.static, which some
+// hosts (Vercel Functions) ignore. basename() blocks path traversal.
+app.get("/uploads/:file", (req, res) => {
+  const file = path.join(UPLOAD_DIR, path.basename(req.params.file));
+  res.sendFile(file, (err) => {
+    if (err && !res.headersSent) res.status(404).json({ error: "File not found." });
+  });
+});
 
 app.get("/api/health", (req, res) => res.json({ ok: true, service: "cms-backend" }));
 
@@ -105,9 +129,16 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: "Internal server error." });
 });
 
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`\n  College Management System API`);
-  console.log(`  \u25B8 running on http://localhost:${PORT}`);
-  console.log(`  \u25B8 health check: http://localhost:${PORT}/api/health\n`);
-});
+// Exported so a platform that imports the app (Vercel Functions) can serve it.
+module.exports = app;
+
+// Listen only when started directly (`npm start` / `npm run dev`). The port
+// comes from the host's PORT variable; 5000 is the local-development default.
+if (require.main === module) {
+  const PORT = process.env.PORT || 5000;
+  app.listen(PORT, () => {
+    console.log(`\n  College Management System API`);
+    console.log(`  \u25B8 listening on port ${PORT}`);
+    console.log(`  \u25B8 health check: /api/health\n`);
+  });
+}

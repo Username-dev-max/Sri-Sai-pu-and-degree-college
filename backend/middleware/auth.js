@@ -1,6 +1,11 @@
 const crypto = require("crypto");
 const jwt = require("jsonwebtoken");
 
+// The fallback secret is public in this repository, so tokens signed with it
+// could be forged by anyone. Production refuses to run without a real one.
+if (process.env.NODE_ENV === "production" && !process.env.JWT_SECRET) {
+  throw new Error("JWT_SECRET must be set when NODE_ENV=production.");
+}
 const JWT_SECRET = process.env.JWT_SECRET || "cms-dev-secret-change-in-production";
 const TOKEN_TTL_SECONDS = 8 * 60 * 60;
 
