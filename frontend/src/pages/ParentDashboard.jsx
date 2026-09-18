@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { CalendarCheck, Award, Wallet, UserRound } from "lucide-react";
 import client from "../api/client";
@@ -100,6 +101,23 @@ export default function ParentDashboard() {
           </div>
         </div>
       </motion.div>
+
+      <div className="flex flex-wrap gap-2">
+        {[
+          ["/parent/attendance", "Attendance & calendar"],
+          ["/parent/internal-marks", "Internal marks"],
+          ["/parent/leave", "Leave requests"],
+        ].map(([to, label]) => (
+          <Link
+            key={to}
+            to={to}
+            className="text-sm px-3.5 py-2 rounded-xl font-medium"
+            style={{ background: "var(--color-surface-raised)", border: "1px solid var(--color-border-default)", color: "var(--color-text-secondary)" }}
+          >
+            {label}
+          </Link>
+        ))}
+      </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
         <StatCard

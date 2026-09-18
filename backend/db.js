@@ -263,6 +263,19 @@ function seed() {
     // a later call can never overwrite what an earlier one recorded.
     callFollowups: [],
 
+    // Internal marks v2: exams are configured by an Admin; marks carry a
+    // DRAFT -> SUBMITTED -> PUBLISHED status; every change is kept in history.
+    internalExams: [],
+    internalMarkHistory: [],
+    // Attendance corrections (old status -> new status, who, when, why).
+    attendanceHistory: [],
+    // Low-attendance alerts, so a student is notified once per drop below the
+    // threshold rather than on every register.
+    attendanceAlerts: [],
+    // Admin-editable academic policy. Empty here: defaults live in
+    // academics.js and are merged in on read.
+    settings: {},
+
     // Server-side login sessions, one per issued token (see middleware/auth).
     // Logout revokes a session, which is what makes a token stop working
     // immediately instead of lingering until it expires.
@@ -609,13 +622,101 @@ function migrate(db) {
     classTeacher(praveen, YEAR3, "", "BCA 3rd Year");
   });
 
+  // Internal marks v2. Marks entered before exams existed carried only a free
+  // text exam label. Each distinct label per academic year + class + section
+  // becomes a configured exam, and the marks point at it. Those marks were
+  // already shown to students and parents, so they are carried over as
+  // PUBLISHED — the upgrade neither hides nor invents anything.
+  once("internal-marks-v2", () => {
+    db.internalExams = db.internalExams || [];
+    db.internalMarkHistory = db.internalMarkHistory || [];
+    const yearId = (db.academicYears.find((y) => y.isCurrent) || db.academicYears[0] || {}).id || "";
+    (db.internalMarks || []).forEach((m) => {
+      if (m.examId) return;
+      const ay = m.academicYearId || yearId;
+      let exam = db.internalExams.find(
+        (e) => e.name === m.exam && e.academicYearId === ay && e.classId === m.classId && (e.sectionId || "") === (m.sectionId || "")
+      );
+      if (!exam) {
+        db.seq.exam = (db.seq.exam || 0) + 1;
+        exam = {
+          id: `EXM${String(db.seq.exam).padStart(4, "0")}`,
+          name: m.exam,
+          type: m.exam,
+          academicYearId: ay,
+          classId: m.classId,
+          sectionId: m.sectionId || "",
+          courseId: m.courseId || "",
+          semester: "",
+          startDate: "",
+          endDate: "",
+          maxMarks: m.maxMarks,
+          subjectMaxMarks: {},
+          status: "ACTIVE",
+          createdBy: null,
+          createdByName: "Migrated from earlier marks",
+          createdAt: m.enteredAt || now,
+          updatedAt: null,
+        };
+        db.internalExams.push(exam);
+      }
+      if (exam.maxMarks !== m.maxMarks) exam.subjectMaxMarks[m.subjectId] = m.maxMarks;
+      m.examId = exam.id;
+      m.academicYearId = ay;
+      m.status = m.status || "PUBLISHED";
+      m.publishedAt = m.publishedAt || m.updatedAt || m.enteredAt || now;
+      m.publishedBy = m.publishedBy || m.enteredBy || null;
+    });
+  });
+
+  // Attendance v2: every register belongs to an academic year.
+  once("attendance-v2", () => {
+    const yearId = (db.academicYears.find((y) => y.isCurrent) || db.academicYears[0] || {}).id || "";
+    (db.attendance || []).forEach((a) => {
+      if (!a.academicYearId) a.academicYearId = yearId;
+      if (a.period === undefined || a.period === null) a.period = "";
+    });
+  });
+
   return changed;
 }
 
 let cache = null;
+let usingSupabase = false;
+
+/**
+ * Bring the database into memory.
+ *
+ * With Supabase configured this reads every table from Postgres; otherwise it
+ * reads the local JSON file exactly as before. Must be awaited before the
+ * first request — server.js does that.
+ *
+ * Either way, `load()` keeps returning the same plain-object shape, so no
+ * route, service or business rule changes.
+ */
+async function initStore() {
+  const { isEnabled } = require("./supabase");
+  if (!isEnabled()) {
+    load();
+    return { mode: "file", location: DB_PATH };
+  }
+  const { hydrate, flush } = require("./supabaseStore");
+  const shape = seed();
+  cache = await hydrate(shape);
+  // A collection added to seed() after the last migration starts empty.
+  for (const key of Object.keys(shape)) {
+    if (cache[key] === undefined) cache[key] = shape[key];
+  }
+  usingSupabase = true;
+  if (migrate(cache)) await flush(cache);
+  return { mode: "supabase", collections: Object.keys(cache).length };
+}
 
 function load() {
   if (cache) return cache;
+  if (usingSupabase) {
+    throw new Error("The database has not been loaded yet. initStore() must finish before the first request.");
+  }
   if (!fs.existsSync(DB_PATH)) {
     // A brand-new install must end up identical to an upgraded one, so the
     // migrations run here too. Without this, the very first boot had no
@@ -644,7 +745,17 @@ function load() {
 }
 
 function save(data = cache) {
+  if (usingSupabase) {
+    // Writes only what changed, queued so two saves never interleave.
+    require("./supabaseStore").flush(data);
+    return;
+  }
   fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
+}
+
+/** Wait for every queued Supabase write. A no-op on the local file. */
+function flushNow() {
+  return usingSupabase ? require("./supabaseStore").flushNow() : Promise.resolve();
 }
 
 function nextId(prefix, counterKey) {
@@ -655,4 +766,4 @@ function nextId(prefix, counterKey) {
   return `${prefix}${n}`;
 }
 
-module.exports = { load, save, nextId, seed, DB_PATH };
+module.exports = { load, save, nextId, seed, DB_PATH, initStore, flushNow, isSupabase: () => usingSupabase };

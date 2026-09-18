@@ -1,74 +1,213 @@
-import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
-import { AlertTriangle } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { AlertTriangle, ChevronLeft, ChevronRight, CalendarCheck } from "lucide-react";
 import client from "../api/client";
-import { useAuth } from "../context/AuthContext";
-import { useData } from "../context/DataContext";
-import TiltCard from "../components/TiltCard";
+import ChildSwitcher, { useLinkedChildren } from "../components/ChildSwitcher";
 import Loader from "../components/Loader";
 import ErrorState from "../components/ErrorState";
+import EmptyState from "../components/EmptyState";
+import StatusBadge from "../components/StatusBadge";
+import Modal from "../components/Modal";
+import { Table, TableHead, TableTh, TableBody, TableRow, TableTd } from "../components/Table";
 
-function barColor(pct) {
-  if (pct < 75) return "#dc2626";
-  if (pct < 85) return "#d97706";
-  return "#16a34a";
+const STATUS_STYLE = {
+  Present: { bg: "var(--color-success-subtle)", fg: "var(--color-success)", tone: "success" },
+  Absent: { bg: "var(--color-danger-subtle)", fg: "var(--color-danger)", tone: "danger" },
+  Leave: { bg: "var(--color-warning-subtle)", fg: "var(--color-warning)", tone: "warning" },
+};
+const WEEK = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const pctText = (p) => (p === null || p === undefined ? "—" : `${p}%`);
+
+function shiftMonth(month, delta) {
+  const [y, m] = month.split("-").map(Number);
+  const d = new Date(y, m - 1 + delta, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
+function Figure({ label, value, color }) {
+  return (
+    <div className="rounded-xl p-3 text-center" style={{ background: "var(--color-surface-sunken)" }}>
+      <div className="text-[11px]" style={{ color: "var(--color-text-muted)" }}>{label}</div>
+      <div className="text-xl font-bold tabular-nums" style={{ color: color || "var(--color-text-primary)" }}>{value}</div>
+    </div>
+  );
+}
+
+function Calendar({ studentId }) {
+  const [month, setMonth] = useState(() => new Date().toLocaleDateString("en-CA").slice(0, 7));
+  const [cal, setCal] = useState(null);
+  const [day, setDay] = useState(null);
+
+  useEffect(() => {
+    setCal(null);
+    client.get(`/attendance/student/${studentId}/calendar`, { params: { month } }).then(({ data }) => setCal(data)).catch(() => setCal({ error: true }));
+  }, [studentId, month]);
+
+  const cells = useMemo(() => {
+    const [y, m] = month.split("-").map(Number);
+    const first = new Date(y, m - 1, 1);
+    const lead = (first.getDay() + 6) % 7; // Monday first
+    const count = new Date(y, m, 0).getDate();
+    return [...Array(lead).fill(null), ...Array.from({ length: count }, (_, i) => `${month}-${String(i + 1).padStart(2, "0")}`)];
+  }, [month]);
+
+  return (
+    <div className="glass rounded-2xl p-4 sm:p-5 shadow-sm">
+      <div className="flex items-center justify-between mb-3">
+        <button aria-label="Previous month" onClick={() => setMonth((x) => shiftMonth(x, -1))} className="p-2 rounded-lg hover:bg-black/5"><ChevronLeft size={18} /></button>
+        <div className="font-semibold text-sm" style={{ color: "var(--color-text-primary)" }}>
+          {new Date(`${month}-01T00:00:00`).toLocaleDateString("en-IN", { month: "long", year: "numeric" })}
+        </div>
+        <button aria-label="Next month" onClick={() => setMonth((x) => shiftMonth(x, 1))} className="p-2 rounded-lg hover:bg-black/5"><ChevronRight size={18} /></button>
+      </div>
+      {!cal ? (
+        <Loader label="Loading calendar…" />
+      ) : cal.error ? (
+        <p className="text-sm" style={{ color: "var(--color-danger)" }}>Couldn't load the calendar.</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-7 gap-1 text-center">
+            {WEEK.map((w) => <div key={w} className="text-[10px] font-semibold py-1" style={{ color: "var(--color-text-muted)" }}>{w}</div>)}
+            {cells.map((d, i) => {
+              if (!d) return <div key={`b${i}`} />;
+              const status = cal.summary[d];
+              const past = d <= cal.today;
+              const st = STATUS_STYLE[status];
+              return (
+                <button
+                  key={d}
+                  onClick={() => status && setDay(d)}
+                  disabled={!status}
+                  aria-label={`${d}: ${status || (past ? "not marked" : "upcoming")}`}
+                  className="aspect-square rounded-lg text-xs sm:text-sm font-medium flex flex-col items-center justify-center border"
+                  style={{
+                    background: st ? st.bg : "transparent",
+                    color: st ? st.fg : past ? "var(--color-text-secondary)" : "var(--color-text-muted)",
+                    borderColor: st ? "transparent" : "var(--color-border-subtle)",
+                    opacity: past || st ? 1 : 0.55,
+                  }}
+                >
+                  {Number(d.slice(8))}
+                  <span className="text-[8px] sm:text-[9px] leading-none mt-0.5 font-semibold">
+                    {status ? status[0] : past ? "—" : ""}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          <div className="flex flex-wrap gap-3 mt-3 text-[11px]" style={{ color: "var(--color-text-muted)" }}>
+            <span>P = Present</span><span>A = Absent</span><span>L = Leave</span><span>— = Not marked</span>
+          </div>
+        </>
+      )}
+      <Modal open={!!day} onClose={() => setDay(null)} title={day ? new Date(`${day}T00:00:00`).toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" }) : ""}>
+        {day && cal?.days?.[day] && (
+          <div className="space-y-2">
+            {cal.days[day].map((x, i) => (
+              <div key={i} className="rounded-xl p-3 flex items-start justify-between gap-3" style={{ background: "var(--color-surface-sunken)" }}>
+                <div className="min-w-0 text-sm">
+                  <div className="font-semibold" style={{ color: "var(--color-text-primary)" }}>{x.subjectName}</div>
+                  <div className="text-xs" style={{ color: "var(--color-text-muted)" }}>
+                    Period {x.period || "—"} · {x.className}{x.sectionName ? ` ${x.sectionName}` : ""} · {x.facultyName || "—"}
+                  </div>
+                </div>
+                <StatusBadge tone={STATUS_STYLE[x.status]?.tone}>{x.status}</StatusBadge>
+              </div>
+            ))}
+          </div>
+        )}
+      </Modal>
+    </div>
+  );
+}
+
+/** A student's own attendance, or a parent's linked child's. */
 export default function StudentAttendance() {
-  const { user } = useAuth();
-  const { subjectName } = useData();
+  const linked = useLinkedChildren();
+  const studentId = linked.activeId;
   const [data, setData] = useState(null);
   const [error, setError] = useState(false);
 
-  function load() {
+  const load = useCallback(() => {
+    if (!studentId) return;
     setError(false);
-    client.get(`/attendance/student/${user.linkedId}`).then(({ data }) => setData(data)).catch(() => setError(true));
-  }
+    setData(null);
+    client.get(`/attendance/student/${studentId}`).then(({ data: d }) => setData(d)).catch(() => setError(true));
+  }, [studentId]);
+  useEffect(load, [load]);
 
-  useEffect(load, [user.linkedId]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  if (error) return <ErrorState full message="Couldn't load your attendance. Please check your connection and try again." onRetry={load} />;
-  if (!data) return <Loader full label="Loading attendance…" />;
+  if (!studentId) return <EmptyState icon={AlertTriangle} title="No student is linked to this account." />;
 
   return (
-    <div className="max-w-3xl space-y-5">
-      <TiltCard intensity={1.5} className="glass rounded-2xl p-6 shadow-sm text-center">
-        <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">Overall Attendance</p>
-        <div className="text-4xl font-extrabold" style={{ color: barColor(data.overallPercentage || 0) }}>
-          {data.overallPercentage ?? "—"}%
-        </div>
-        {data.overallPercentage !== null && data.overallPercentage < 75 && (
-          <div className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-red-600 bg-red-50 px-3 py-1.5 rounded-full">
-            <AlertTriangle size={13} /> Below the required 75% attendance
+    <div className="space-y-5 max-w-5xl">
+      <ChildSwitcher linked={linked} />
+      {error ? (
+        <ErrorState message="Couldn't load attendance." onRetry={load} />
+      ) : !data ? (
+        <Loader label="Loading attendance…" />
+      ) : (
+        <>
+          <div className="glass rounded-2xl p-5 shadow-sm space-y-4">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide" style={{ color: "var(--color-text-muted)" }}>Overall attendance</p>
+                <div className="text-4xl font-extrabold tabular-nums" style={{ color: data.belowThreshold ? "var(--color-danger)" : "var(--color-success)" }}>
+                  {pctText(data.overallPercentage)}
+                </div>
+              </div>
+              {data.belowThreshold && (
+                <StatusBadge tone="danger">Below the required {data.policy.lowThreshold}%</StatusBadge>
+              )}
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <Figure label="Total classes" value={data.totals.total} />
+              <Figure label="Present" value={data.totals.present} color="var(--color-success)" />
+              <Figure label="Absent" value={data.totals.absent} color="var(--color-danger)" />
+              <Figure label="Leave" value={data.totals.leave} color="var(--color-warning)" />
+            </div>
+            <p className="text-[11px]" style={{ color: "var(--color-text-muted)" }}>
+              Attendance % = {data.policy.formula}. Required: {data.policy.lowThreshold}%.
+            </p>
           </div>
-        )}
-      </TiltCard>
 
-      <div className="space-y-3">
-        {data.subjectSummary.map((s, i) => (
-          <motion.div key={s.subject} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.06 }}>
-            <TiltCard intensity={1.5} className="glass rounded-xl p-4 shadow-sm">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-slate-700">{subjectName(s.subject)}</span>
-                <span className="text-sm font-bold" style={{ color: barColor(s.percentage) }}>{s.percentage}%</span>
-              </div>
-              <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
-                <motion.div
-                  initial={{ width: 0 }}
-                  animate={{ width: `${s.percentage}%` }}
-                  transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1], delay: i * 0.06 }}
-                  className="h-full rounded-full"
-                  style={{ background: barColor(s.percentage) }}
-                />
-              </div>
-              <div className="text-xs text-slate-400 mt-1.5">{s.present} of {s.total} classes attended</div>
-            </TiltCard>
-          </motion.div>
-        ))}
-        {data.subjectSummary.length === 0 && (
-          <div className="py-16 text-center text-slate-400 text-sm">No attendance has been recorded yet.</div>
-        )}
-      </div>
+          <div className="glass rounded-2xl overflow-hidden shadow-sm">
+            <div className="px-5 py-3 border-b font-semibold text-sm" style={{ borderColor: "var(--color-border-subtle)", color: "var(--color-text-primary)" }}>
+              Subject-wise attendance
+            </div>
+            {data.subjectSummary.length === 0 ? (
+              <EmptyState icon={CalendarCheck} title="No attendance records available." description="Attendance appears here once registers are taken." />
+            ) : (
+              <Table>
+                <TableHead>
+                  <TableTh>Subject</TableTh>
+                  <TableTh>Total</TableTh>
+                  <TableTh>Present</TableTh>
+                  <TableTh>Absent</TableTh>
+                  <TableTh>Leave</TableTh>
+                  <TableTh align="right">Attendance %</TableTh>
+                </TableHead>
+                <TableBody>
+                  {data.subjectSummary.map((s) => (
+                    <TableRow key={s.subject}>
+                      <TableTd className="font-medium">{s.subjectName}</TableTd>
+                      <TableTd>{s.total}</TableTd>
+                      <TableTd>{s.present}</TableTd>
+                      <TableTd>{s.absent}</TableTd>
+                      <TableTd>{s.leave}</TableTd>
+                      <TableTd align="right">
+                        <StatusBadge tone={s.percentage === null ? "neutral" : s.percentage < data.policy.lowThreshold ? "danger" : "success"}>
+                          {pctText(s.percentage)}
+                        </StatusBadge>
+                      </TableTd>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </div>
+
+          <Calendar studentId={studentId} />
+        </>
+      )}
     </div>
   );
 }

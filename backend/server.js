@@ -27,12 +27,36 @@ const leaveRequestRoutes = require("./routes/leaveRequests");
 const noteRoutes = require("./routes/notes");
 const callFollowupRoutes = require("./routes/callFollowups");
 const internalMarkRoutes = require("./routes/internalMarks");
+const settingsRoutes = require("./routes/settings");
 const { verifyToken } = require("./middleware/auth");
 const path = require("path");
 
 const { UPLOAD_DIR } = require("./storage");
+const fileStore = require("./fileStore");
+const { initStore } = require("./db");
+const supabase = require("./supabase");
+
+// In production the data must live in Supabase, never in a file that a
+// redeploy would wipe. Fail at startup rather than lose records later.
+supabase.assertProductionReady();
 
 const app = express();
+
+/**
+ * The database is loaded once, before the first request is served. Requests
+ * that arrive during startup wait for it instead of seeing an empty database.
+ */
+const storeReady = initStore()
+  .then((info) => {
+    // Seed accounts are checked after the data is in memory.
+    require("./routes/auth").ensureSeedUsers();
+    console.log(`  ▸ storage: ${info.mode === "supabase" ? "Supabase PostgreSQL" : `local file (${info.location})`}`);
+    return info;
+  })
+  .catch((e) => {
+    console.error("DATABASE STARTUP FAILED:", e.message);
+    throw e;
+  });
 
 // Behind a reverse proxy / hosting router, take the client IP from the first
 // X-Forwarded-For hop so audit logs and sessions record the real address.
@@ -52,9 +76,18 @@ app.use(express.json());
 
 // Public uploads. A route handler rather than express.static, which some
 // hosts (Vercel Functions) ignore. basename() blocks path traversal.
-app.get("/uploads/:file", (req, res) => {
-  const file = path.join(UPLOAD_DIR, path.basename(req.params.file));
-  res.sendFile(file, (err) => {
+// With Supabase configured the bytes come from the public bucket; locally
+// they come from the uploads folder, exactly as before.
+app.get("/uploads/:file", async (req, res) => {
+  const name = path.basename(req.params.file);
+  if (supabase.isEnabled()) {
+    const found = await fileStore.get("public", name);
+    if (!found) return res.status(404).json({ error: "File not found." });
+    res.setHeader("Content-Type", found.contentType);
+    res.setHeader("Cache-Control", "public, max-age=3600");
+    return res.send(found.buffer);
+  }
+  return res.sendFile(path.join(UPLOAD_DIR, name), (err) => {
     if (err && !res.headersSent) res.status(404).json({ error: "File not found." });
   });
 });
@@ -70,6 +103,11 @@ app.use("/api", (req, res, next) => {
     res.setHeader("Pragma", "no-cache");
   }
   next();
+});
+
+// Nothing touches the database until it has finished loading.
+app.use("/api", (req, res, next) => {
+  storeReady.then(() => next()).catch(() => res.status(503).json({ error: "The service is starting up. Please try again in a moment." }));
 });
 
 app.use("/api/public", publicRoutes);
@@ -114,6 +152,7 @@ app.use("/api/leave-requests", leaveRequestRoutes);
 app.use("/api/notes", noteRoutes);
 app.use("/api/call-followups", callFollowupRoutes);
 app.use("/api/internal-marks", internalMarkRoutes);
+app.use("/api/settings", settingsRoutes);
 app.use("/api/notices", genericCrud("notices", "N", ["Admin", "Faculty"]));
 app.use("/api/attendance", attendanceRoutes);
 app.use("/api/marks", marksRoutes);
@@ -136,9 +175,18 @@ module.exports = app;
 // comes from the host's PORT variable; 5000 is the local-development default.
 if (require.main === module) {
   const PORT = process.env.PORT || 5000;
-  app.listen(PORT, () => {
-    console.log(`\n  College Management System API`);
-    console.log(`  \u25B8 listening on port ${PORT}`);
-    console.log(`  \u25B8 health check: /api/health\n`);
-  });
+  // Listen only once the database is loaded, so the first request cannot
+  // arrive before the data is there.
+  storeReady
+    .then(() => {
+      app.listen(PORT, () => {
+        console.log(`\n  College Management System API`);
+        console.log(`  \u25B8 listening on port ${PORT}`);
+        console.log(`  \u25B8 health check: /api/health\n`);
+      });
+    })
+    .catch((e) => {
+      console.error("\n  Startup aborted:", e.message, "\n");
+      process.exit(1);
+    });
 }

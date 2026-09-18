@@ -19,9 +19,11 @@ router.use(verifyToken);
 
 // Stored outside the statically served uploads directory; served only
 // through GET /:id/file after an authorisation check.
-const { PRIVATE_DIR, ensureDir } = require("../storage");
-const DIR = path.join(PRIVATE_DIR, "notes");
-ensureDir(DIR);
+const fileStore = require("../fileStore");
+// Kept in the private store under notes/, so the storedName already held in
+// the database keeps resolving after the move to Supabase Storage.
+const FOLDER = "notes";
+const objectKey = (storedName) => `${FOLDER}/${storedName}`;
 
 const TYPES = {
   ".pdf": "application/pdf",
@@ -35,11 +37,7 @@ const TYPES = {
 const VIEWABLE = new Set([".pdf", ".jpg", ".jpeg", ".png"]);
 
 const upload = multer({
-  storage: multer.diskStorage({
-    destination: (req, file, cb) => cb(null, DIR),
-    filename: (req, file, cb) =>
-      cb(null, `note-${Date.now()}-${Math.round(Math.random() * 1e9)}${path.extname(file.originalname).toLowerCase()}`),
-  }),
+  storage: multer.memoryStorage(),
   limits: { fileSize: 20 * 1024 * 1024 },
   fileFilter: (req, file, cb) =>
     TYPES[path.extname(file.originalname).toLowerCase()]
@@ -98,15 +96,23 @@ function expand(note, db) {
 
 // POST /api/notes/upload (Faculty, Admin) — store the file, return a handle.
 router.post("/upload", requireRole("Faculty", "Admin"), (req, res) => {
-  upload.single("file")(req, res, (err) => {
+  upload.single("file")(req, res, async (err) => {
     if (err) return res.status(400).json({ error: err.message });
     if (!req.file) return res.status(400).json({ error: "No file uploaded." });
-    res.status(201).json({ storedName: req.file.filename, originalName: req.file.originalname });
+    try {
+      const ext = path.extname(req.file.originalname).toLowerCase();
+      const storedName = `note-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
+      await fileStore.put("private", objectKey(storedName), req.file.buffer, TYPES[ext]);
+      res.status(201).json({ storedName, originalName: req.file.originalname });
+    } catch (e) {
+      console.error("note upload failed:", e.message);
+      res.status(500).json({ error: "Could not store the file." });
+    }
   });
 });
 
 // POST /api/notes (Faculty, Admin) — register the note against its class.
-router.post("/", requireRole("Faculty", "Admin"), (req, res) => {
+router.post("/", requireRole("Faculty", "Admin"), async (req, res) => {
   const db = load();
   const b = req.body || {};
   for (const f of ["classId", "subjectId", "title", "storedName"]) {
@@ -122,7 +128,7 @@ router.post("/", requireRole("Faculty", "Admin"), (req, res) => {
   if (!canTouchSubjectInClass(req.user, b.subjectId, b.classId, b.sectionId || "", db)) {
     return res.status(403).json({ error: "You are not assigned to teach this subject for that class." });
   }
-  if (/[\\/]/.test(b.storedName) || !fs.existsSync(path.join(DIR, b.storedName))) {
+  if (/[\\/]/.test(b.storedName) || !(await fileStore.exists("private", objectKey(b.storedName)))) {
     return res.status(400).json({ error: "The uploaded file could not be found. Please upload it again." });
   }
 
@@ -183,27 +189,31 @@ router.get("/", (req, res) => {
 });
 
 // GET /api/notes/:id/file[?inline=1] — authorised view/download.
-router.get("/:id/file", (req, res) => {
+router.get("/:id/file", async (req, res) => {
   const db = load();
   const note = db.notes.find((n) => n.id === req.params.id);
   if (!note || !canSee(note, req.user, db)) return res.status(404).json({ error: "Note not found." });
+  if (!note.storedName) return res.status(404).json({ error: "The stored file is missing." });
 
-  const file = path.join(DIR, note.storedName || "");
-  if (!note.storedName || !file.startsWith(DIR) || !fs.existsSync(file)) {
-    return res.status(404).json({ error: "The stored file is missing." });
+  try {
+    const found = await fileStore.get("private", objectKey(note.storedName));
+    if (!found) return res.status(404).json({ error: "The stored file is missing." });
+    const ext = path.extname(note.storedName).toLowerCase();
+    // Strip characters that could break out of the header value.
+    const safeName = String(note.originalName || note.storedName).replace(/["\r\n]/g, "");
+    const inline = req.query.inline === "1" && VIEWABLE.has(ext);
+    res.setHeader("Content-Type", TYPES[ext] || found.contentType || "application/octet-stream");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("Content-Disposition", `${inline ? "inline" : "attachment"}; filename="${safeName}"`);
+    res.send(found.buffer);
+  } catch (e) {
+    console.error("note download failed:", e.message);
+    res.status(500).json({ error: "Could not read the file." });
   }
-  const ext = path.extname(note.storedName).toLowerCase();
-  // Strip characters that could break out of the header value.
-  const safeName = String(note.originalName || note.storedName).replace(/["\r\n]/g, "");
-  const inline = req.query.inline === "1" && VIEWABLE.has(ext);
-  res.setHeader("Content-Type", TYPES[ext] || "application/octet-stream");
-  res.setHeader("X-Content-Type-Options", "nosniff");
-  res.setHeader("Content-Disposition", `${inline ? "inline" : "attachment"}; filename="${safeName}"`);
-  fs.createReadStream(file).pipe(res);
 });
 
 // DELETE /api/notes/:id — the uploader, or an Admin.
-router.delete("/:id", requireRole("Faculty", "Admin"), (req, res) => {
+router.delete("/:id", requireRole("Faculty", "Admin"), async (req, res) => {
   const db = load();
   const i = db.notes.findIndex((n) => n.id === req.params.id);
   if (i === -1) return res.status(404).json({ error: "Note not found." });
@@ -214,10 +224,9 @@ router.delete("/:id", requireRole("Faculty", "Admin"), (req, res) => {
   db.notes.splice(i, 1);
   save(db);
 
-  const file = path.join(DIR, note.storedName || "");
-  if (note.storedName && file.startsWith(DIR) && fs.existsSync(file)) {
+  if (note.storedName) {
     try {
-      fs.unlinkSync(file);
+      await fileStore.remove("private", objectKey(note.storedName));
     } catch (e) {
       console.error("note file delete failed:", e.message);
     }

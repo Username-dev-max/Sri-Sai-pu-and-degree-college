@@ -16,6 +16,7 @@ const { load, save } = require("../db");
 const { verifyToken, requireRole } = require("../middleware/auth");
 const { audit, notify, linkedChildIds } = require("../services");
 const { classTeacherForStudent, isClassTeacherFor } = require("../scope");
+const { recordAttendanceHistory, refreshLowAttendance } = require("../attendanceService");
 
 const router = express.Router();
 router.use(verifyToken);
@@ -23,16 +24,15 @@ router.use(verifyToken);
 // Supporting documents (a medical certificate, say) are private: they live
 // outside the statically served uploads directory and are streamed only
 // through GET /:id/document after an authorisation check.
-const { PRIVATE_DIR, ensureDir } = require("../storage");
-const DIR = path.join(PRIVATE_DIR, "leave");
-ensureDir(DIR);
+const fileStore = require("../fileStore");
+// Kept in the private store under leave/, so the storedName already held in
+// the database keeps resolving after the move to Supabase Storage.
+const FOLDER = "leave";
+const objectKey = (storedName) => `${FOLDER}/${storedName}`;
 const ALLOWED = new Set([".pdf", ".png", ".jpg", ".jpeg"]);
+const TYPES = { ".pdf": "application/pdf", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg" };
 const upload = multer({
-  storage: multer.diskStorage({
-    destination: (req, file, cb) => cb(null, DIR),
-    filename: (req, file, cb) =>
-      cb(null, `leave-${Date.now()}-${Math.round(Math.random() * 1e9)}${path.extname(file.originalname).toLowerCase()}`),
-  }),
+  storage: multer.memoryStorage(),
   limits: { fileSize: 8 * 1024 * 1024 },
   fileFilter: (req, file, cb) =>
     ALLOWED.has(path.extname(file.originalname).toLowerCase())
@@ -82,15 +82,23 @@ function familyAccounts(db, studentId) {
 
 // POST /api/leave-requests/upload (Student) — attach a supporting document.
 router.post("/upload", requireRole("Student"), (req, res) => {
-  upload.single("file")(req, res, (err) => {
+  upload.single("file")(req, res, async (err) => {
     if (err) return res.status(400).json({ error: err.message });
     if (!req.file) return res.status(400).json({ error: "No file uploaded." });
-    res.status(201).json({ storedName: req.file.filename, originalName: req.file.originalname });
+    try {
+      const ext = path.extname(req.file.originalname).toLowerCase();
+      const storedName = `leave-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
+      await fileStore.put("private", objectKey(storedName), req.file.buffer, TYPES[ext]);
+      res.status(201).json({ storedName, originalName: req.file.originalname });
+    } catch (e) {
+      console.error("leave document upload failed:", e.message);
+      res.status(500).json({ error: "Could not store the document." });
+    }
   });
 });
 
 // POST /api/leave-requests (Student)
-router.post("/", requireRole("Student"), (req, res) => {
+router.post("/", requireRole("Student"), async (req, res) => {
   const db = load();
   const b = req.body || {};
   const student = db.students.find((s) => s.id === req.user.linkedId);
@@ -105,7 +113,7 @@ router.post("/", requireRole("Student"), (req, res) => {
     return res.status(404).json({ error: "That subject does not exist." });
   }
   // The attachment must be one this route actually stored — never a path.
-  if (b.storedName && (/[\\/]/.test(b.storedName) || !fs.existsSync(path.join(DIR, b.storedName)))) {
+  if (b.storedName && (/[\\/]/.test(b.storedName) || !(await fileStore.exists("private", objectKey(b.storedName))))) {
     return res.status(400).json({ error: "The attached document could not be found. Please upload it again." });
   }
   const overlap = db.leaveRequests.find(
@@ -199,8 +207,10 @@ router.patch("/:id/decision", requireRole("Faculty", "Admin"), (req, res) => {
   // Approval turns any ABSENT mark already recorded in the range into LEAVE.
   // It never overwrites a PRESENT mark and never creates attendance for
   // future days — those show as LEAVE when their register is taken.
+  // Each conversion is written to attendance history, like any correction.
   let converted = 0;
   if (decision === "APPROVED") {
+    const now = row.decidedAt;
     db.attendance.forEach((a) => {
       if (
         a.student === row.studentId &&
@@ -209,11 +219,23 @@ router.patch("/:id/decision", requireRole("Faculty", "Admin"), (req, res) => {
         a.status === "Absent" &&
         (!row.subjectId || a.subject === row.subjectId)
       ) {
+        recordAttendanceHistory(db, {
+          row: a,
+          oldStatus: "Absent",
+          newStatus: "Leave",
+          user: req.user,
+          reason: `Leave request ${row.id} approved`,
+          source: "leave-approval",
+        });
         a.status = "Leave";
         a.leaveRequestId = row.id;
+        a.updatedBy = req.user.id;
+        a.updatedByName = req.user.name || "";
+        a.updatedAt = now;
         converted += 1;
       }
     });
+    if (converted) refreshLowAttendance(db, [row.studentId]);
   }
   save(db);
 
@@ -245,17 +267,23 @@ router.patch("/:id/decision", requireRole("Faculty", "Admin"), (req, res) => {
 });
 
 // GET /api/leave-requests/:id/document — authorised download.
-router.get("/:id/document", (req, res) => {
+router.get("/:id/document", async (req, res) => {
   const db = load();
   const row = db.leaveRequests.find((r) => r.id === req.params.id);
   if (!row || !canSee(row, req.user, db) || !row.storedName) {
     return res.status(404).json({ error: "Document not found." });
   }
-  const file = path.join(DIR, row.storedName);
-  if (!file.startsWith(DIR) || !fs.existsSync(file)) {
-    return res.status(404).json({ error: "The stored file is missing." });
+  try {
+    const found = await fileStore.get("private", objectKey(row.storedName));
+    if (!found) return res.status(404).json({ error: "The stored file is missing." });
+    res.setHeader("Content-Type", found.contentType);
+    res.setHeader("Content-Disposition", `attachment; filename="${(row.originalName || row.storedName).replace(/"/g, "")}"`);
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.send(found.buffer);
+  } catch (e) {
+    console.error("leave document download failed:", e.message);
+    res.status(500).json({ error: "Could not read the document." });
   }
-  res.download(file, row.originalName || row.storedName);
 });
 
 // DELETE /api/leave-requests/:id — a Student may withdraw their own PENDING

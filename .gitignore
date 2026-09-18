@@ -50,6 +50,15 @@ backend/private-uploads/
 # Record ids of development/demo data created by backend/scripts/dev-seed.mjs
 backend/dev-seed-manifest.json
 
+# Timestamped backups of the runtime database (taken before the Supabase
+# migration). Same sensitive contents as data.json — never commit them.
+backend/data.backup-*.json
+
+# Export of the previous Supabase schema's data, taken before it was dropped.
+# It is a database dump of someone's records — never publish it.
+old-supabase-backup-*.json
+backend/old-supabase-backup-*.json
+
 # Local tool settings (machine-specific)
 .claude/settings.local.json
 .claude/scheduled_tasks.lock

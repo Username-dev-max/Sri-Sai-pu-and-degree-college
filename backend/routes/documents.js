@@ -18,6 +18,7 @@ const router = express.Router();
 router.use(verifyToken);
 
 const { PRIVATE_DIR } = require("../storage");
+const fileStore = require("../fileStore");
 
 /** Who may see this document? */
 function canRead(doc, user, db) {
@@ -62,32 +63,39 @@ router.get("/", (req, res) => {
 });
 
 // GET /api/documents/:id/file — authorised download.
-router.get("/:id/file", (req, res) => {
+// The bytes come from the private store (Supabase bucket or local folder);
+// either way they are only ever sent after the check below.
+router.get("/:id/file", async (req, res) => {
   const db = load();
   const doc = repo.findById("documents", req.params.id);
   if (!doc) return res.status(404).json({ error: "Document not found." });
   // Same 404 for "not yours" as for "doesn't exist" — never confirm that
   // another student's document id is real.
   if (!canRead(doc, req.user, db)) return res.status(404).json({ error: "Document not found." });
+  if (!doc.storedName) return res.status(404).json({ error: "The stored file is missing." });
 
-  const stored = path.join(PRIVATE_DIR, doc.storedName || "");
-  // Defend against a stored name that tries to escape the directory.
-  if (!doc.storedName || !stored.startsWith(PRIVATE_DIR) || !fs.existsSync(stored)) {
-    return res.status(404).json({ error: "The stored file is missing." });
+  try {
+    const found = await fileStore.get("private", doc.storedName);
+    if (!found) return res.status(404).json({ error: "The stored file is missing." });
+    res.setHeader("Content-Type", found.contentType);
+    res.setHeader("Content-Disposition", `attachment; filename="${(doc.name || doc.storedName).replace(/"/g, "")}"`);
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.send(found.buffer);
+  } catch (e) {
+    console.error("document download failed:", e.message);
+    res.status(500).json({ error: "Could not read the document." });
   }
-  res.download(stored, doc.name || doc.storedName);
 });
 
 // DELETE /api/documents/:id  (Admin)
-router.delete("/:id", requireRole("Admin"), (req, res) => {
+router.delete("/:id", requireRole("Admin"), async (req, res) => {
   const doc = repo.findById("documents", req.params.id);
   if (!doc) return res.status(404).json({ error: "Document not found." });
   repo.remove("documents", doc.id);
 
-  const stored = path.join(PRIVATE_DIR, doc.storedName || "");
-  if (doc.storedName && stored.startsWith(PRIVATE_DIR) && fs.existsSync(stored)) {
+  if (doc.storedName) {
     try {
-      fs.unlinkSync(stored);
+      await fileStore.remove("private", doc.storedName);
     } catch (e) {
       console.error("could not delete stored file:", e.message);
     }

@@ -49,6 +49,33 @@ function studentsInClass(db, classId, sectionId = "") {
     .filter((s) => s.status !== "Inactive");
 }
 
+/**
+ * The students who actually take a subject in a class/section.
+ *
+ * Driven by the academic configuration, never a guess:
+ *  - a subject tied to a different class (a 2nd Year BCA subject) has nobody
+ *    in 1st Year;
+ *  - a subject mapped to one or more combinations/programs (Physics in PCMB
+ *    and PCMCs) is taken only by students of those combinations;
+ *  - a subject mapped to none (a language taught to the whole class) is taken
+ *    by everyone in the class.
+ * `courseId` optionally narrows to one combination/program.
+ */
+function studentsForSubject(db, classId, sectionId, subjectId, courseId = "") {
+  const subject = (db.subjects || []).find((s) => s.id === subjectId);
+  if (!subject) return [];
+  if (subject.classId && subject.classId !== classId) return [];
+  const mapped = (db.courses || []).filter((c) => (c.subjects || []).includes(subjectId)).map((c) => c.id);
+  return studentsInClass(db, classId, sectionId)
+    .filter((s) => mapped.length === 0 || mapped.includes(s.course))
+    .filter((s) => !courseId || s.course === courseId)
+    .sort(
+      (a, b) =>
+        String(a.rollNumber || "").localeCompare(String(b.rollNumber || ""), undefined, { numeric: true }) ||
+        String(a.name || "").localeCompare(String(b.name || ""))
+    );
+}
+
 /* ------------------------------- faculty --------------------------------- */
 
 /** This faculty member's teaching-assignment rows. */
@@ -167,6 +194,7 @@ module.exports = {
   rowCoversStudent,
   rowCoversClass,
   studentsInClass,
+  studentsForSubject,
   facultyAssignmentRows,
   facultySubjectIds,
   facultyClassIds,

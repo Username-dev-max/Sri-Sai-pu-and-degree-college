@@ -45,7 +45,9 @@ function ensureSeedUsers() {
   });
   if (changed) save(db);
 }
-ensureSeedUsers();
+// With Supabase the database is not in memory yet at require time, so the
+// seed check runs from server.js once initStore() has finished.
+if (!require("../supabase").isEnabled()) ensureSeedUsers();
 
 // POST /api/auth/login  { username, password, role? }
 router.post("/login", (req, res) => {
@@ -152,3 +154,4 @@ router.post("/change-password", verifyToken, (req, res) => {
 });
 
 module.exports = router;
+module.exports.ensureSeedUsers = ensureSeedUsers;

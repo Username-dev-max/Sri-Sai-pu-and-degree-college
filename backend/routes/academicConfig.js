@@ -52,6 +52,76 @@ router.get("/", (req, res) => {
   });
 });
 
+// GET /api/academic-config/scope — everything the attendance and marks
+// screens cascade through, plus what THIS user may work on. `teachable` is
+// null for college-wide roles and the exact class/section/subject list for
+// Faculty; the server re-checks every request regardless.
+router.get("/scope", (req, res) => {
+  const db = load();
+  const role = req.user.role;
+  if (role === "Student" || role === "Parent") return res.status(403).json({ error: "Not authorized." });
+  const { getSettings } = require("../academics");
+  const { facultyAssignmentRows, classTeacherRows } = require("../scope");
+  const s = getSettings(db);
+
+  let teachable = null;
+  if (role === "Faculty") {
+    teachable = facultyAssignmentRows(req.user, db).map((a) => ({
+      subjectId: a.subjectId,
+      classId: a.classId || "",
+      sectionId: a.sectionId || "",
+      academicYearId: a.academicYearId || "",
+    }));
+  } else if (role === "Attendance Staff" && !s.attendance.staffCanMark) {
+    teachable = [];
+  }
+  const classTeacherOf =
+    role === "Faculty"
+      ? classTeacherRows(req.user, db).map((t) => ({ classId: t.classId, sectionId: t.sectionId || "", courseId: t.courseId || "" }))
+      : [];
+
+  res.json({
+    role,
+    academicYears: (db.academicYears || []).slice().sort((a, b) => String(b.label).localeCompare(String(a.label))),
+    levels: (db.courseLevels || []).slice().sort((a, b) => (a.order || 0) - (b.order || 0)),
+    classes: (db.classes || []).slice().sort((a, b) => (a.order || 0) - (b.order || 0)),
+    streams: (db.streams || []).slice().sort((a, b) => (a.order || 0) - (b.order || 0)),
+    sections: db.sections || [],
+    courses: (db.courses || [])
+      .filter((c) => c.active !== false)
+      .map((c) => ({ id: c.id, name: c.name, levelId: c.levelId || "", stream: c.stream || "", department: c.department || "", semesters: c.semesters || 0, subjects: c.subjects || [] })),
+    subjects: (db.subjects || []).map((x) => ({
+      id: x.id,
+      name: x.name,
+      code: x.code || "",
+      department: x.department || "",
+      classId: x.classId || "",
+      courseId: x.courseId || "",
+      type: x.type || "",
+      semester: x.semester || "",
+    })),
+    // Subjects assigned to a class without being mapped to a program (a
+    // language taught to a whole year, for example).
+    classSubjects: (db.facultyAssignments || []).map((a) => ({ subjectId: a.subjectId, classId: a.classId || "", sectionId: a.sectionId || "" })),
+    departments: (db.departments || []).map((d) => ({ id: d.id, name: d.name })),
+    teachable,
+    classTeacherOf,
+    settings: {
+      periodsPerDay: s.attendance.periodsPerDay,
+      lowThreshold: s.attendance.lowThreshold,
+      leaveInDenominator: s.attendance.leaveInDenominator,
+      staffCanMark: s.attendance.staffCanMark,
+      staffCanEdit: s.attendance.staffCanEdit,
+      facultyCanEdit: s.attendance.facultyCanEdit,
+      facultyCanPublish: s.marks.facultyCanPublish,
+      staffCanViewMarks: s.marks.staffCanView,
+      examTypes: s.marks.examTypes,
+      passPercentage: s.marks.passPercentage,
+      gradeScale: s.marks.gradeScale,
+    },
+  });
+});
+
 // PATCH /api/academic-config/combinations/:id  (Admin) — switch a combination
 // on or off for this college without deleting it and losing its history.
 router.patch("/combinations/:id", requireRole("Admin"), (req, res) => {

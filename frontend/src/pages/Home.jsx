@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import client from "../api/client";
 import { useAuth } from "../context/AuthContext";
 import Loader from "../components/Loader";
@@ -26,9 +26,12 @@ import { ROLE_HOME } from "./Login";
 export default function Home() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [params] = useSearchParams();
   const [data, setData] = useState(null);
   const [error, setError] = useState(false);
-  const [search, setSearch] = useState("");
+  // A search started from the navigation bar on another public page arrives
+  // here as ?q= — the filtering itself lives on this page.
+  const [search, setSearch] = useState(() => params.get("q") || "");
 
   useEffect(() => {
     if (!user) return;

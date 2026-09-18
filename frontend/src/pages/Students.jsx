@@ -12,7 +12,7 @@ import TiltCard from "../components/TiltCard";
 import Button from "../components/Button";
 import EmptyState from "../components/EmptyState";
 import StatusBadge from "../components/StatusBadge";
-import { Table, TableHead, TableTh, TableBody, TableRow, TableTd } from "../components/Table";
+import { Table, TableHead, TableTh, TableBody, TableTd } from "../components/Table";
 
 const BLANK = { name: "", gender: "Male", dob: "", email: "", phone: "", address: "", department: "", course: "", semester: 1, guardian: "", guardianPhone: "" };
 

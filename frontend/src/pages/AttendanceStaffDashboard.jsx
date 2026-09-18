@@ -1,17 +1,18 @@
 import Attendance from "./Attendance";
 
 /**
- * Attendance Staff work the same marking screen Faculty use, but across every
- * subject rather than only their own assigned ones.
+ * Attendance Staff mark attendance on the same screen Faculty use. What they
+ * may do is decided by the Admin's Academic Policies and enforced by the
+ * server — this page adds no permissions of its own.
  */
 export default function AttendanceStaffDashboard() {
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <p className="text-sm" style={{ color: "var(--color-text-secondary)" }}>
-        Select a subject and date, then mark each student present or absent. Saved attendance is visible to Admin,
-        Faculty, the student, and their parent.
+        Choose the class, section, subject, date and period, mark each student Present, Absent or Leave, then review the
+        summary and save. Saved attendance is visible to Admin, the class's faculty, the student and their parents.
       </p>
-      <Attendance allSubjects />
+      <Attendance />
     </div>
   );
 }
