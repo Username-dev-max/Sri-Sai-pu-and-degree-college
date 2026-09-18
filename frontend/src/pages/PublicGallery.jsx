@@ -19,6 +19,7 @@ function Placeholder({ label }) {
     >
       <ImageOff size={20} />
       <span className="text-[11px] font-semibold">{label}</span>
+      <span className="text-[10px]">Photo coming soon</span>
     </div>
   );
 }
@@ -73,7 +74,7 @@ export default function PublicGallery() {
                             <img src={g.imageUrl} alt={g.caption || cat} className="w-full h-full object-cover" />
                           </div>
                         ))
-                      : <Placeholder label={`[${cat.toUpperCase()} PHOTO]`} />}
+                      : <Placeholder label={cat} />}
                   </div>
                 </div>
               );

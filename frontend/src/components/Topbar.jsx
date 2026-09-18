@@ -30,7 +30,12 @@ export default function Topbar({ title, onMenuClick }) {
       <button onClick={onMenuClick} aria-label="Open menu" className="lg:hidden hover:opacity-80" style={{ color: "var(--color-text-secondary)" }}>
         <Menu size={22} />
       </button>
-      <h1 className="text-lg sm:text-xl font-bold truncate shrink-0" style={{ color: "var(--color-text-primary)" }}>{title}</h1>
+      {/* `truncate` and `shrink-0` contradicted each other: the title could
+          not shrink, so a long one ("Attendance Management" on a 390px
+          screen) pushed the controls below past the right edge and the whole
+          page scrolled sideways. Letting the title shrink and clip keeps the
+          controls on screen. */}
+      <h1 className="text-lg sm:text-xl font-bold truncate min-w-0" style={{ color: "var(--color-text-primary)" }}>{title}</h1>
 
       {/* Global search is an Admin capability — the endpoint behind it is
           Admin-gated, so it is not offered to roles that cannot use it. */}
@@ -40,7 +45,7 @@ export default function Topbar({ title, onMenuClick }) {
         </div>
       )}
 
-      <div className="ml-auto flex items-center gap-2 sm:gap-4">
+      <div className="ml-auto flex items-center gap-2 sm:gap-4 shrink-0">
         <motion.button
           whileTap={{ scale: 0.9 }}
           whileHover={{ scale: 1.08 }}

@@ -6,6 +6,7 @@ import ErrorState from "../components/ErrorState";
 import GlassFacultyCard from "../components/GlassFacultyCard";
 import PublicNav from "../components/home/PublicNav";
 import PublicFooter from "../components/home/PublicFooter";
+import { publicText } from "../lib/display";
 
 export default function FacultyDirectory() {
   const [college, setCollege] = useState(null);
@@ -39,7 +40,9 @@ export default function FacultyDirectory() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query, department]);
 
-  const deptName = (id) => departments.find((d) => d.id === id)?.name || id || "[VERIFY]";
+  // Two faculty records have no department recorded. Show a dash rather than
+  // the internal "[VERIFY]" marker used in the data.
+  const deptName = (id) => publicText(departments.find((d) => d.id === id)?.name || id);
 
   return (
     <div className="relative">

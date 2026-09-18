@@ -9,10 +9,26 @@ import usePrefersReducedMotion from "../hooks/usePrefersReducedMotion";
  * broken image. Optional slow Ken-Burns drift and a soft brand glow, both
  * disabled under prefers-reduced-motion.
  */
+/**
+ * Callers historically passed developer shorthand such as "[CAMPUS PHOTO]".
+ * That bracketed, shouted form leaked onto the public site and read as an
+ * unfinished page, so it is normalised to ordinary sentence case here — one
+ * place, rather than hunting every caller. Nothing is invented: the tile
+ * still says plainly that the photograph has not been added.
+ */
+function tidyLabel(raw) {
+  const inner = String(raw).replace(/[[\]]/g, "").replace(/\s+/g, " ").trim();
+  if (!inner) return "Photograph coming soon";
+  if (/^[A-Z0-9 ./-]+$/.test(inner)) {
+    return inner.charAt(0).toUpperCase() + inner.slice(1).toLowerCase();
+  }
+  return inner;
+}
+
 export default function CampusImage({
   src,
   alt,
-  label = "[CAMPUS PHOTO]",
+  label = "Photograph coming soon",
   className = "",
   kenBurns = false,
   glow = false,
@@ -41,7 +57,7 @@ export default function CampusImage({
         }}
       >
         <ImageOff size={26} />
-        <span className="text-xs font-semibold tracking-wide text-center px-3">{label}</span>
+        <span className="text-xs font-semibold tracking-wide text-center px-3">{tidyLabel(label)}</span>
       </div>
     );
   }

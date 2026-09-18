@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
 import { UserRound, BadgeCheck } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { isMissing } from "../lib/display";
 
 export default function GlassFacultyCard({ faculty, deptName, delay = 0 }) {
   const navigate = useNavigate();
@@ -23,10 +24,17 @@ export default function GlassFacultyCard({ faculty, deptName, delay = 0 }) {
       <div className="inline-flex items-center gap-1 mt-2 px-2.5 py-1 rounded-full text-xs font-semibold" style={{ background: "rgba(37,99,235,0.1)", color: "var(--color-brand-600)" }}>
         {deptName ? deptName(faculty.department) : faculty.department}
       </div>
-      <p className="text-xs mt-2.5" style={{ color: "var(--color-text-muted)" }}>{faculty.experience}</p>
-      <p className="flex items-center justify-center gap-1 text-xs mt-1" style={{ color: "var(--color-text-secondary)" }}>
-        <BadgeCheck size={12} className="text-blue-600 shrink-0" /> {faculty.qualification}
-      </p>
+      {/* Records whose experience or qualification was never supplied hold
+          the internal "[VERIFY]" marker. Omit the line entirely rather than
+          printing that, or a row of dashes, to a visitor. */}
+      {!isMissing(faculty.experience) && (
+        <p className="text-xs mt-2.5" style={{ color: "var(--color-text-muted)" }}>{faculty.experience}</p>
+      )}
+      {!isMissing(faculty.qualification) && (
+        <p className="flex items-center justify-center gap-1 text-xs mt-1" style={{ color: "var(--color-text-secondary)" }}>
+          <BadgeCheck size={12} className="text-blue-600 shrink-0" /> {faculty.qualification}
+        </p>
+      )}
       <button
         onClick={() => navigate(`/faculty-directory/${faculty.id}`)}
         className="mt-4 w-full text-xs font-semibold pt-3 border-t"

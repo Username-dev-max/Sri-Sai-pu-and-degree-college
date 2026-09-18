@@ -6,6 +6,7 @@ import Loader from "../components/Loader";
 import ErrorState from "../components/ErrorState";
 import PublicNav from "../components/home/PublicNav";
 import PublicFooter from "../components/home/PublicFooter";
+import { publicText } from "../lib/display";
 
 export default function FacultyProfile() {
   const { id } = useParams();
@@ -51,23 +52,23 @@ export default function FacultyProfile() {
                 <UserRound size={36} style={{ color: "var(--color-text-muted)" }} />
               </div>
               <h1 className="font-display text-2xl font-semibold" style={{ color: "var(--color-text-primary)" }}>{faculty.name}</h1>
-              <p className="text-sm mt-1" style={{ color: "var(--color-text-secondary)" }}>{faculty.designation}</p>
+              <p className="text-sm mt-1" style={{ color: "var(--color-text-secondary)" }}>{publicText(faculty.designation, "")}</p>
 
               <div className="grid sm:grid-cols-3 gap-4 mt-8 text-left">
                 <div className="glow-card rounded-xl p-4" style={{ background: "var(--color-surface-raised)", border: "1px solid var(--color-border-subtle)" }}>
                   <Building2 size={16} className="text-blue-600 mb-2" />
                   <div className="text-xs" style={{ color: "var(--color-text-muted)" }}>Department</div>
-                  <div className="text-sm font-semibold mt-0.5" style={{ color: "var(--color-text-primary)" }}>{faculty.departmentName || "[VERIFY]"}</div>
+                  <div className="text-sm font-semibold mt-0.5" style={{ color: "var(--color-text-primary)" }}>{publicText(faculty.departmentName)}</div>
                 </div>
                 <div className="glow-card rounded-xl p-4" style={{ background: "var(--color-surface-raised)", border: "1px solid var(--color-border-subtle)" }}>
                   <Briefcase size={16} className="text-blue-600 mb-2" />
                   <div className="text-xs" style={{ color: "var(--color-text-muted)" }}>Experience</div>
-                  <div className="text-sm font-semibold mt-0.5" style={{ color: "var(--color-text-primary)" }}>{faculty.experience}</div>
+                  <div className="text-sm font-semibold mt-0.5" style={{ color: "var(--color-text-primary)" }}>{publicText(faculty.experience)}</div>
                 </div>
                 <div className="glow-card rounded-xl p-4" style={{ background: "var(--color-surface-raised)", border: "1px solid var(--color-border-subtle)" }}>
                   <BadgeCheck size={16} className="text-blue-600 mb-2" />
                   <div className="text-xs" style={{ color: "var(--color-text-muted)" }}>Qualification</div>
-                  <div className="text-sm font-semibold mt-0.5" style={{ color: "var(--color-text-primary)" }}>{faculty.qualification}</div>
+                  <div className="text-sm font-semibold mt-0.5" style={{ color: "var(--color-text-primary)" }}>{publicText(faculty.qualification)}</div>
                 </div>
               </div>
             </div>

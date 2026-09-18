@@ -45,20 +45,28 @@ export default function DepartmentProfile() {
           ) : (
             <>
               <h1 className="font-display text-3xl font-semibold" style={{ color: "var(--color-text-primary)" }}>{dept.name} Department</h1>
-              <p className="text-sm mt-2" style={{ color: "var(--color-text-secondary)" }}>
-                Head of Department: {dept.hod || "[ADD OFFICIAL INFORMATION]"}
-              </p>
+              {/* Shown only once a head of department has been recorded —
+                  a visitor should not be shown an editorial placeholder. */}
+              {dept.hod ? (
+                <p className="text-sm mt-2" style={{ color: "var(--color-text-secondary)" }}>
+                  Head of Department: {dept.hod}
+                </p>
+              ) : null}
 
               <div className="grid sm:grid-cols-2 gap-5 mt-8">
                 <div className="glow-card rounded-2xl p-6" style={{ background: "var(--color-surface-raised)", border: "1px solid var(--color-border-subtle)" }}>
                   <Eye size={18} className="text-blue-600 mb-3" />
                   <h3 className="font-semibold text-sm mb-1.5" style={{ color: "var(--color-text-primary)" }}>Vision</h3>
-                  <p className="text-sm" style={{ color: "var(--color-text-secondary)" }}>{dept.vision || "[ADD OFFICIAL VISION STATEMENT]"}</p>
+                  <p className="text-sm" style={{ color: dept.vision ? "var(--color-text-secondary)" : "var(--color-text-muted)" }}>
+                    {dept.vision || "Not published yet."}
+                  </p>
                 </div>
                 <div className="glow-card rounded-2xl p-6" style={{ background: "var(--color-surface-raised)", border: "1px solid var(--color-border-subtle)" }}>
                   <Target size={18} className="text-blue-600 mb-3" />
                   <h3 className="font-semibold text-sm mb-1.5" style={{ color: "var(--color-text-primary)" }}>Mission</h3>
-                  <p className="text-sm" style={{ color: "var(--color-text-secondary)" }}>{dept.mission || "[ADD OFFICIAL MISSION STATEMENT]"}</p>
+                  <p className="text-sm" style={{ color: dept.mission ? "var(--color-text-secondary)" : "var(--color-text-muted)" }}>
+                    {dept.mission || "Not published yet."}
+                  </p>
                 </div>
               </div>
 

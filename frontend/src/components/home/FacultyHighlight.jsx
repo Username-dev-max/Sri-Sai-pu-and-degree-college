@@ -1,9 +1,10 @@
 import { useNavigate } from "react-router-dom";
 import GlassFacultyCard from "../GlassFacultyCard";
+import { publicText } from "../../lib/display";
 
 export default function FacultyHighlight({ faculty = [], departments = [] }) {
   const navigate = useNavigate();
-  const deptName = (id) => departments.find((d) => d.id === id)?.name || id || "[VERIFY]";
+  const deptName = (id) => publicText(departments.find((d) => d.id === id)?.name || id);
 
   if (!faculty.length) return null;
   const preview = faculty.slice(0, 4);

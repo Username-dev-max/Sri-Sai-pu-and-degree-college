@@ -84,14 +84,20 @@ export default function Hero({ departments = [], college = {} }) {
               <div className="font-display text-2xl font-semibold" style={{ color: "var(--color-text-primary)" }}>PU + UG</div>
               <div className="text-xs mt-0.5" style={{ color: "var(--color-text-muted)" }}>Pre-University and<br />Degree programs</div>
             </div>
-            <div>
-              <div className="font-display text-2xl font-semibold" style={{ color: "var(--color-text-primary)" }}>
-                {college.establishedYear ? `Est. ${college.establishedYear}` : "Est. [—]"}
+            {/* The founding year is only shown once an administrator has
+                entered it under College Profile. An empty stat reading
+                "Est. [—]" made a finished page look unfinished, and the
+                year must not be guessed. */}
+            {college.establishedYear ? (
+              <div>
+                <div className="font-display text-2xl font-semibold" style={{ color: "var(--color-text-primary)" }}>
+                  {`Est. ${college.establishedYear}`}
+                </div>
+                <div className="text-xs mt-0.5" style={{ color: "var(--color-text-muted)" }}>
+                  Year established
+                </div>
               </div>
-              <div className="text-xs mt-0.5" style={{ color: "var(--color-text-muted)" }}>
-                {college.establishedYear ? "Year established" : "[ADD OFFICIAL\nESTABLISHED YEAR]"}
-              </div>
-            </div>
+            ) : null}
           </div>
         </motion.div>
 

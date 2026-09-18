@@ -1,7 +1,10 @@
 import { useNavigate } from "react-router-dom";
 import { ImageOff } from "lucide-react";
 
-const PLACEHOLDER_LABELS = ["[CAMPUS PHOTO]", "[FACULTY PHOTO]", "[SPORTS PHOTO]", "[EVENT PHOTO]"];
+// Shown only until photographs are uploaded under Admin -> Gallery. These
+// are ordinary captions, not the bracketed developer shorthand that used to
+// appear here and made a finished page read as unfinished.
+const PLACEHOLDER_LABELS = ["Campus", "Faculty", "Sports", "Events"];
 
 export default function GalleryPreview({ gallery = [] }) {
   const navigate = useNavigate();
@@ -25,7 +28,8 @@ export default function GalleryPreview({ gallery = [] }) {
                 style={{ background: "var(--color-surface-sunken)", border: "1px dashed var(--color-border-default)", color: "var(--color-text-muted)" }}
               >
                 <ImageOff size={18} />
-                <span className="text-[10px] font-semibold">{item.placeholder}</span>
+                <span className="text-[11px] font-semibold">{item.placeholder}</span>
+                <span className="text-[10px]">Photo coming soon</span>
               </div>
             ) : (
               <div key={item.id} className="glow-media glow-card aspect-[4/3] rounded-xl overflow-hidden" style={{ border: "1px solid var(--color-border-subtle)" }}>
