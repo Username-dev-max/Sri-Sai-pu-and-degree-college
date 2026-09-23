@@ -3,13 +3,13 @@
   "buildCommand": "npm run build",
   "outputDirectory": "frontend/dist",
   "functions": {
-    "api/**/*.js": {
+    "api/*.js": {
       "maxDuration": 60,
       "memory": 1024
     }
   },
   "rewrites": [
     { "source": "/uploads/(.*)", "destination": "/api/public-file/$1" },
-    { "source": "/((?!api).*)", "destination": "/index.html" }
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
 }
