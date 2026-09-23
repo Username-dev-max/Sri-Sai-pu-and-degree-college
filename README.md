@@ -1354,7 +1354,7 @@ Function. Both share one domain, so the browser calls a relative `/api` and noth
 
 ```
 repository root
-├── api/[...path].js      the Vercel Function: re-exports backend/server.js
+├── api/index.js          the Vercel Function: wraps backend/server.js
 ├── backend/              the Express application (unchanged)
 ├── frontend/             the React app, built to frontend/dist
 ├── package.json          backend dependencies + the build script
@@ -1368,11 +1368,12 @@ repository root
   "buildCommand": "npm run build",
   "outputDirectory": "frontend/dist",
   "functions": {
-    "api/**/*.js": { "maxDuration": 60, "memory": 1024 }
+    "api/index.js": { "maxDuration": 60, "memory": 1024 }
   },
   "rewrites": [
-    { "source": "/uploads/(.*)", "destination": "/api/public-file/$1" },
-    { "source": "/((?!api).*)", "destination": "/index.html" }
+    { "source": "/uploads/(.*)", "destination": "/api/index?__path=/api/public-file/$1" },
+    { "source": "/api/(.*)", "destination": "/api/index?__path=/api/$1" },
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
 }
 ```
@@ -1381,11 +1382,12 @@ Why it is shaped this way:
 
 | Choice | Reason |
 |---|---|
-| `api/[...path].js` (a catch-all filename) | Vercel routes every `/api/*` request to this file through its own file-based routing, so `req.url` arrives exactly as the browser sent it. The Express routers already mount under `/api`, so they match with no path surgery. A platform *rewrite* would not reliably preserve the path. |
+| `/api/(.*)` rewritten to `/api/index?__path=/api/$1` | A catch-all filename (`api/[...path].js`) was tried first and deployed as a **single-segment** route: `/api/health` reached the function but `/api/auth/login` returned 404. Carrying the original path in a query parameter does not depend on how the platform interprets bracket filenames or whether it preserves `req.url`. `api/index.js` puts the path back before Express sees the request. |
 | Backend dependencies in the **root** `package.json` | The function is built from the repository root, so that is where its `node_modules` comes from. `backend/package.json` stays as it is for running the server directly. |
-| `/uploads/(.*)` to `/api/public-file/$1` | Older records store image paths such as `/uploads/photo.jpg`. The destination carries the file name itself, so the lookup does not depend on how the platform rewrites `req.url`. `server.js` serves both paths with the same handler. |
+| `/uploads/(.*)` to the same function | Older records store image paths such as `/uploads/photo.jpg`. The rewrite carries `/api/public-file/<name>` as the path, and `server.js` serves that alongside `/uploads/<name>` with one handler. |
 | `/((?!api).*)` to `/index.html` | React Router needs deep links such as `/admin` to load the app. Vercel checks the filesystem first, so real assets are unaffected, and the pattern excludes `/api` so an unknown API path still returns JSON `404` rather than the HTML page. |
 | `maxDuration: 60` | Headroom for a cold start that has to load the database before serving its first request. |
+| The function reports startup failures as JSON | A missing variable made `server.js` throw while loading, which the platform surfaced only as `FUNCTION_INVOCATION_FAILED`. `api/index.js` catches that and returns the reason, so a misconfigured deployment names its own problem. |
 
 ### Routing
 
