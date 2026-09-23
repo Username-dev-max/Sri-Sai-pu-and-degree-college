@@ -1,3 +1,4 @@
+const crypto = require("crypto");
 const express = require("express");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
@@ -21,14 +22,20 @@ const GENERIC_LOGIN_ERROR = "Invalid username or password.";
 // be used to discover which usernames exist.
 const DUMMY_HASH = bcrypt.hashSync("timing-equaliser-not-a-real-password", 10);
 
-// Ensure seed users have real bcrypt hashes on first boot (plainSeed -> password),
+// Ensure seed users have real bcrypt hashes on first boot,
 // and that seed accounts added after this data.json was created (e.g. the
 // Attendance Staff and Parent roles) are present without needing a DB reset.
 function ensureSeedUsers() {
   const db = load();
   let changed = false;
+  const isProduction = process.env.NODE_ENV === "production";
 
   seed().users.forEach((s) => {
+    // The demo accounts for the non-admin roles exist so the dashboards can
+    // be signed into while developing. A real deployment must not gain a
+    // login nobody asked for, so in production only the administrator is
+    // created; every other account is made deliberately by an administrator.
+    if (isProduction && s.username !== "admin") return;
     if (!db.users.some((u) => u.username.toLowerCase() === s.username.toLowerCase())) {
       db.users.push({ ...s });
       db.seq.user = Math.max(db.seq.user || 0, s.id);
@@ -37,11 +44,19 @@ function ensureSeedUsers() {
   });
 
   db.users.forEach((u) => {
-    if (!u.password && u.plainSeed) {
-      u.password = bcrypt.hashSync(u.plainSeed, 10);
-      delete u.plainSeed;
-      changed = true;
+    if (u.password) return;
+    const supplied = u.username === "admin" ? process.env.SEED_ADMIN_PASSWORD : null;
+    const plain = supplied || crypto.randomBytes(12).toString("base64url");
+    u.password = bcrypt.hashSync(plain, 10);
+    // A generated password is a one-time way in, so it must be replaced at
+    // first sign-in. One supplied deliberately is left as the owner set it.
+    if (!supplied) {
+      u.mustReset = true;
+      console.log(`  First-run password for "${u.username}": ${plain}`);
+      console.log("  This is shown once. Sign in and change it now.");
     }
+    delete u.plainSeed;
+    changed = true;
   });
   if (changed) save(db);
 }

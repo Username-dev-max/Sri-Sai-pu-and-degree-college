@@ -90,7 +90,12 @@ async function main() {
   };
   const credentials = [];
 
-  const admin = await login("admin", "Admin@123");
+  const adminPassword = process.env.SEED_ADMIN_PASSWORD || process.env.ADMIN_PASSWORD;
+  if (!adminPassword) {
+    console.error("Set SEED_ADMIN_PASSWORD (or ADMIN_PASSWORD) before running this script.");
+    process.exit(1);
+  }
+  const admin = await login("admin", adminPassword);
   log("auth", "signed in as admin");
 
   /* Resolve the real structure rather than assuming ids. */

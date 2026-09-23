@@ -1450,6 +1450,7 @@ size; it is not a design for high concurrency.
 | `SUPABASE_SERVICE_ROLE_KEY` | yes | The service-role key, from Supabase → Project Settings → API. **Backend only** — it bypasses Row Level Security, so it must never appear in frontend code, in a `VITE_` variable, or in this repository. |
 | `JWT_SECRET` | yes | A long random value. The server refuses to start in production without it. Generate 48 random bytes, hex encoded, with the Node crypto module. |
 | `NODE_ENV` | yes | `production` |
+| `SEED_ADMIN_PASSWORD` | no | Only used when the admin account is created on a brand-new database. Left unset, a strong password is generated and written to the server log once, and must be changed at first sign-in. |
 | `SUPABASE_PUBLIC_BUCKET` | no | Defaults to `cms-public` |
 | `SUPABASE_PRIVATE_BUCKET` | no | Defaults to `cms-private` |
 | `CORS_ORIGINS` | no | Leave empty. The site and the API share a domain, so no CORS headers are needed. |

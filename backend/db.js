@@ -123,15 +123,24 @@ function seed() {
       { id: "S001", name: "[ADD STUDENT NAME]", gender: "", dob: "", email: "", phone: "", address: "", department: "DEP07", course: "C04", semester: 1, admissionYear: 2026, status: "Active", guardian: "", guardianPhone: "" },
     ],
     users: [
-      // password for all seed users below is bcrypt-hashed at first run in ensureSeedUsers()
-      { id: 1, username: "admin", password: null, plainSeed: "Admin@123", role: "Admin", name: "Admin", linkedId: null, email: "satishreddy.kv0@gmail.com", mustReset: false },
-      { id: 2, username: "shashi.pv", password: null, plainSeed: "Faculty@123", role: "Faculty", name: "Shashi Kumar P.V", linkedId: "F019", email: "", mustReset: false },
-      { id: 3, username: "demo.student", password: null, plainSeed: "Student@123", role: "Student", name: "[ADD STUDENT NAME]", linkedId: "S001", email: "", mustReset: false },
-      // Attendance Staff marks attendance but has no academic record of their own.
-      { id: 4, username: "attendance.staff", password: null, plainSeed: "Staff@123", role: "Attendance Staff", name: "[ADD STAFF NAME]", linkedId: null, email: "", mustReset: false },
-      // A Parent account is linked to the student whose record they may view
-      // (same linkedId pattern the Student/Faculty accounts already use).
-      { id: 5, username: "demo.parent", password: null, plainSeed: "Parent@123", role: "Parent", name: "[ADD PARENT NAME]", linkedId: "S001", email: "", mustReset: false },
+      // No password appears here. ensureSeedUsers() gives each account a real
+      // one on first run, from SEED_ADMIN_PASSWORD or a generated value.
+      { id: 1, username: "admin", password: null, role: "Admin", name: "Admin", linkedId: null, email: "satishreddy.kv0@gmail.com", mustReset: false },
+      // The demo logins for the other roles exist so each dashboard can be
+      // signed into while developing. A real deployment must not gain a login
+      // nobody asked for, so production starts with the administrator alone and
+      // every other account is created deliberately by an administrator.
+      ...(process.env.NODE_ENV === "production"
+        ? []
+        : [
+          { id: 2, username: "shashi.pv", password: null, role: "Faculty", name: "Shashi Kumar P.V", linkedId: "F019", email: "", mustReset: false },
+          { id: 3, username: "demo.student", password: null, role: "Student", name: "[ADD STUDENT NAME]", linkedId: "S001", email: "", mustReset: false },
+          // Attendance Staff marks attendance but has no academic record of their own.
+          { id: 4, username: "attendance.staff", password: null, role: "Attendance Staff", name: "[ADD STAFF NAME]", linkedId: null, email: "", mustReset: false },
+          // A Parent account is linked to the student whose record they may view
+          // (same linkedId pattern the Student/Faculty accounts already use).
+          { id: 5, username: "demo.parent", password: null, role: "Parent", name: "[ADD PARENT NAME]", linkedId: "S001", email: "", mustReset: false },
+          ]),
     ],
     attendance: [],
     // Cleared: the old exam rows referenced fictional St. Joseph subject ids.
