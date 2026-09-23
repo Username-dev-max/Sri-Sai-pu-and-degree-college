@@ -49,7 +49,7 @@ The official website and role-based management portal for **Sri Sai PU and Degre
 29. [.gitignore](#29-gitignore)
 30. [GitHub security](#30-github-security)
 31. [Deployment architecture](#31-deployment-architecture)
-32. [Frontend deployment on Vercel](#32-frontend-deployment-on-vercel)
+32. [Deploying to Vercel](#32-deploying-to-vercel)
 33. [Backend deployment](#33-backend-deployment)
 34. [Database production setup](#34-database-production-setup)
 35. [File storage in production](#35-file-storage-in-production)
@@ -221,7 +221,7 @@ own `package.json`).
 college-management-system/
 ├── README.md
 ├── .gitignore
-├── vercel.json                   Vercel Services config: /api and /uploads → backend, all else → frontend
+├── vercel.json                   Vercel config: build settings and the routing table
 ├── package.json                  stray root manifest (framer-motion only) — not used by either app
 ├── database/
 │   └── schema.sql                legacy MySQL reference schema — OUT OF DATE, not used by the app
@@ -275,7 +275,7 @@ college-management-system/
 |---|---|
 | `backend/package.json` | Backend dependencies; `dev` and `start` scripts; Node version requirement |
 | `backend/server.js` | Creates the Express app, applies middleware, mounts every router, starts listening on `PORT` |
-| `vercel.json` | Vercel Services deployment: service definitions and the public routing table |
+| `vercel.json` | Vercel deployment: build settings, the API function and the public routing table |
 | `backend/storage.js` | Resolves `DATA_DIR` and the database / upload locations |
 | `backend/db.js` | The database: default seed data, record migrations, `load()` and `save()` over `data.json` |
 | `backend/repo.js` | `findAll`, `findById`, `insert`, `update`, `remove`, `paginate` helpers |
@@ -1346,144 +1346,123 @@ student documents, fee records, receipts, or faculty salary information.
 
 ## 31. Deployment architecture
 
-### Deployment platform
+### One Vercel project for the whole repository
 
-The repository had no deployment configuration. The target configuration for this project uses
-**Vercel Services**: several services in one Vercel project, sharing one domain and one routing table.
-It is defined in **`vercel.json` at the repository root**:
+The frontend and the backend live in this single repository and deploy as a **single Vercel
+project**. The built React site is served as static files; the Express API runs as one Vercel
+Function. Both share one domain, so the browser calls a relative `/api` and nothing needs CORS.
+
+```
+repository root
+├── api/[...path].js      the Vercel Function: re-exports backend/server.js
+├── backend/              the Express application (unchanged)
+├── frontend/             the React app, built to frontend/dist
+├── package.json          backend dependencies + the build script
+└── vercel.json           build settings and the routing table
+```
+
+`vercel.json`:
 
 ```json
 {
-  "services": {
-    "frontend": {
-      "root": "frontend/",
-      "framework": "vite",
-      "rewrites": [
-        { "source": "/(.*)", "destination": "/index.html" }
-      ]
-    },
-    "backend": {
-      "root": "backend/",
-      "framework": "express",
-      "entrypoint": "server.js"
-    }
+  "buildCommand": "npm run build",
+  "outputDirectory": "frontend/dist",
+  "functions": {
+    "api/**/*.js": { "maxDuration": 60, "memory": 1024 }
   },
   "rewrites": [
-    { "source": "/api(/.*)?", "destination": { "service": "backend" } },
-    { "source": "/uploads/(.*)", "destination": { "service": "backend" } },
-    { "source": "/(.*)", "destination": { "service": "frontend" } }
+    { "source": "/uploads/(.*)", "destination": "/api/public-file/$1" },
+    { "source": "/((?!api).*)", "destination": "/index.html" }
   ]
 }
 ```
 
-How this differs from the draft configuration, and why:
+Why it is shaped this way:
 
-| Change | Reason |
+| Choice | Reason |
 |---|---|
-| `"type": "service"` removed from destinations | Vercel's documented destination object accepts only `service` and `path` |
-| Backend `framework: "express"` and `entrypoint: "server.js"` | The backend is Express, and `server.js` is its entry file. It exports the app for Vercel and still listens on `PORT` when started with `npm start`. |
-| `/uploads/(.*)` routed to the backend | Uploaded images are stored and served by the backend at `/uploads/<file>`. Without this rule the frontend catch-all would swallow them. |
-| Frontend service `rewrites` to `/index.html` | React Router needs deep links such as `/admin` to load the app. Vercel serves real static files first, so assets are unaffected. |
+| `api/[...path].js` (a catch-all filename) | Vercel routes every `/api/*` request to this file through its own file-based routing, so `req.url` arrives exactly as the browser sent it. The Express routers already mount under `/api`, so they match with no path surgery. A platform *rewrite* would not reliably preserve the path. |
+| Backend dependencies in the **root** `package.json` | The function is built from the repository root, so that is where its `node_modules` comes from. `backend/package.json` stays as it is for running the server directly. |
+| `/uploads/(.*)` to `/api/public-file/$1` | Older records store image paths such as `/uploads/photo.jpg`. The destination carries the file name itself, so the lookup does not depend on how the platform rewrites `req.url`. `server.js` serves both paths with the same handler. |
+| `/((?!api).*)` to `/index.html` | React Router needs deep links such as `/admin` to load the app. Vercel checks the filesystem first, so real assets are unaffected, and the pattern excludes `/api` so an unknown API path still returns JSON `404` rather than the HTML page. |
+| `maxDuration: 60` | Headroom for a cold start that has to load the database before serving its first request. |
 
 ### Routing
 
-Top-level rewrites are evaluated **in order**; the first match wins and routing into a service is final.
-
-| Request | Goes to | Why |
-|---|---|---|
-| `/api`, `/api/auth/login`, `/api/students`, `/api/attendance`, `/api/fees`, `/api/notifications` … | backend | `/api(/.*)?` is listed first |
-| `/uploads/img-….jpeg` | backend | public uploaded files |
-| `/`, `/login`, `/admin`, `/student`, `/parent`, `/gallery`, `/about` … | frontend | catch-all, then the SPA fallback |
-| `/campus/logo.png`, `/assets/*.js` | frontend | real files in the Vite build |
-| An unknown `/api/...` path | backend | JSON `404` — never the SPA page |
-
-The backend receives the **original path** (`/api/students`, not `/students`), which matches how
-`server.js` mounts its routes. Browser code calls the relative `/api`, so frontend and API are
-**same-origin** and need no CORS.
-
-### ⚠️ Blocker: storage on Vercel Functions
-
-On Vercel, the Express backend runs as a **Vercel Function on Fluid compute**. This project stores its
-database and uploads on the local disk. That does not work there:
-
-| Platform behaviour (Vercel docs) | Effect on this project |
+| Request | Served by |
 |---|---|
-| Function filesystem is **read-only**; only `/tmp` is writable, and `/tmp` does not persist | `data.json` cannot be created or saved. Every API call that loads or writes the database fails — including the homepage data, **login** (which records the session and last-login time) and all admin changes. |
-| Several instances can serve traffic; shared state belongs in an external store | Each instance would hold its own in-memory copy of the database |
-| Request body limit **4.5 MB** | Uploads above 4.5 MB fail, although the app allows up to 8, 12 and 20 MB |
-| `express.static()` is ignored | Handled: `/uploads/<file>` is now an ordinary route |
+| `/api/auth/login`, `/api/students`, `/api/attendance` … | the function (Express) |
+| `/uploads/img-….jpeg` | the function, via the rewrite, from Supabase Storage |
+| `/assets/*.js`, `/campus/*.jpg`, `/favicon.svg` | static files from `frontend/dist` |
+| `/`, `/login`, `/admin`, `/student/fees` … | `index.html`, then React Router |
+| An unknown `/api/...` path | the function — JSON `404`, never the SPA page |
 
-**Result:** with the current storage code, the Vercel deployment **builds and routes correctly, but
-cannot run the application**. Setting `DATA_DIR=/tmp` would only look like it works: data would vanish
-between instances and restarts. Never do that in production.
+### Storage
 
-Two ways forward:
+The earlier blocker here — a database and uploads on the local disk, which a read-only serverless
+filesystem cannot support — **no longer applies**. Persistence is Supabase PostgreSQL and Supabase
+Storage (sections 34 and 35). The function holds the database in memory and loads it from Supabase
+when an instance starts.
 
-| Option | What it takes | Code changes |
-|---|---|---|
-| **A. Stay fully on Vercel** | Move the database from `data.json` to a hosted database, and uploads to object storage (for example Vercel Blob), keeping private files behind the existing authorisation routes | **Required — not currently implemented.** `db.js`, `repo.js` and every upload/download route |
-| **B. Frontend on Vercel, backend on a Node host with a persistent disk** | A server or platform that runs `npm start` as **one** long-running process with a persistent disk or volume (`DATA_DIR`) | None beyond this release. Uses a frontend-only Vercel config (section 32) instead of the root `vercel.json`. |
+**Cold starts.** That load reads every table. Done one table at a time it took about 15 seconds,
+which is longer than a function may spend starting up; the reads are now issued together and it
+takes about 3 seconds. Requests that arrive while it is still loading wait for it rather than
+seeing an empty database, and a failed attempt is not cached, so a transient error does not leave
+an instance permanently answering `503`.
+
+**One writer.** The in-memory copy is the working set, so this design assumes a single active
+instance. Under enough concurrent traffic Vercel may run several, and two instances writing
+different records in the same moment can overwrite one another. It is sound for a college of this
+size; it is not a design for high concurrency.
 
 ### Remaining deployment issues
 
 | # | Issue | Action |
 |---|---|---|
-| 1 | Local-disk database and uploads (above) | Choose option A or B before going live |
-| 2 | Single-instance database | On option B run exactly one backend instance, with no autoscaling |
-| 3 | No login rate limiting | Add rate limiting (a code change) or limit at the proxy/firewall |
-| 4 | Seed accounts with public passwords exist on first run | Change the admin password immediately; deactivate demo accounts |
-| 5 | Faculty can read every student record and non-identity document | Security follow-up (a code change) |
-| 6 | Announcement attachments and gallery uploads are public by URL | Do not upload private files through those screens |
-| 7 | The development database contains demo data | Start production from a fresh database, never a development copy |
-| 8 | `vercel dev` on Windows cannot start the frontend service (the CLI runs `vite --port $PORT`, which `cmd.exe` does not expand) | Develop locally with `npm run dev` in `frontend` and `backend` |
-
-Fixed in this release: storage paths are configurable (`DATA_DIR`), CORS no longer allows every origin,
-`JWT_SECRET` is enforced in production, Express trusts the proxy's forwarded client IP, and the backend
-exports its app for platforms that import it.
+| 1 | Several function instances could write concurrently (above) | Acceptable at this scale; revisit if traffic grows |
+| 2 | No login rate limiting | Add rate limiting, or limit at the proxy/firewall |
+| 3 | Seed accounts with known passwords exist | Change the admin password immediately; deactivate demo accounts |
+| 4 | Faculty can read every student record and non-identity document | Security follow-up (a code change) |
+| 5 | Announcement attachments and gallery uploads are public by URL | Do not upload private files through those screens |
+| 6 | Request body limit is 4.5 MB on Vercel | Uploads above that fail, although the app allows more |
+| 7 | `vercel dev` on Windows cannot start the Vite service (the CLI runs `vite --port $PORT`, which `cmd.exe` does not expand) | Develop with `npm start` in `backend` and `npm run dev` in `frontend` |
 
 ---
 
-## 32. Frontend deployment on Vercel
+## 32. Deploying to Vercel
 
-### Option A — Vercel Services (root `vercel.json`)
+1. Push this repository to GitHub.
+2. In Vercel, **Add New → Project** and import the repository.
+3. Leave **Root Directory** at the repository root. Vercel reads the root `vercel.json`; do not set
+   the root to `frontend` or `backend`.
+4. Leave the build settings alone — `vercel.json` supplies them. No framework preset is needed.
+5. Under **Settings → Environment Variables**, add the values below for **Production** (and Preview,
+   if you use it).
+6. Deploy, then work through the checklist in [section 43](#43-deployment-checklist).
 
-Blocked until storage is moved (section 31). The dashboard steps are:
+### Environment variables
 
-1. Push the repository to GitHub.
-2. In Vercel, create a new project and **import the GitHub repository**.
-3. Leave **Root Directory** at the repository root. Vercel must read the root `vercel.json`, which defines
-   both services. Do **not** set it to `frontend` or `backend`.
-4. Services may need to be enabled for your Vercel team — the Services documentation marks it as a
-   permission-gated feature. Confirm in the dashboard.
-5. Build settings come from `vercel.json` per service: the `frontend` service is detected as Vite
-   (`npm install`, `npm run build`, output `dist`), and `backend` as Express.
-6. Under **Environment Variables**, add `JWT_SECRET` (a long random value).
-7. Deploy, then check the URLs in [section 43](#43-deployment-checklist).
+| Variable | Required | Value |
+|---|---|---|
+| `SUPABASE_URL` | yes | `https://<project-ref>.supabase.co` |
+| `SUPABASE_SERVICE_ROLE_KEY` | yes | The service-role key, from Supabase → Project Settings → API. **Backend only** — it bypasses Row Level Security, so it must never appear in frontend code, in a `VITE_` variable, or in this repository. |
+| `JWT_SECRET` | yes | A long random value. The server refuses to start in production without it. Generate 48 random bytes, hex encoded, with the Node crypto module. |
+| `NODE_ENV` | yes | `production` |
+| `SUPABASE_PUBLIC_BUCKET` | no | Defaults to `cms-public` |
+| `SUPABASE_PRIVATE_BUCKET` | no | Defaults to `cms-private` |
+| `CORS_ORIGINS` | no | Leave empty. The site and the API share a domain, so no CORS headers are needed. |
+| `DATA_DIR` | **no — do not set** | Only for local file storage. Setting it on Vercel would point the app at a disk that does not persist. |
 
-### Option B — frontend only on Vercel, backend elsewhere
+### Local development
 
-Create a Vercel project with **Root Directory `frontend`**. With this option the root `vercel.json` is not
-used. Add `frontend/vercel.json`, replacing `<YOUR-BACKEND-HOST>` with the backend's real HTTPS address:
-
-```json
-{
-  "rewrites": [
-    { "source": "/api/:path*", "destination": "https://<YOUR-BACKEND-HOST>/api/:path*" },
-    { "source": "/uploads/:path*", "destination": "https://<YOUR-BACKEND-HOST>/uploads/:path*" },
-    { "source": "/(.*)", "destination": "/index.html" }
-  ]
-}
+```bash
+npm run install:all      # root, frontend and backend dependencies
+npm start                # backend on http://localhost:5000
+npm run dev:web          # frontend on http://localhost:5173
 ```
 
-| Setting | Value (from `frontend/package.json`) |
-|---|---|
-| Framework preset | Vite |
-| Install command | `npm install` |
-| Build command | `npm run build` (runs `vite build`) |
-| Output directory | `dist` |
-| Environment variables | none |
-
-The browser still talks only to the Vercel domain, so API calls stay same-origin.
+Open **http://localhost:5173**. Vite binds IPv6 localhost, so use `localhost` rather than
+`127.0.0.1`. The dev server proxies `/api` and `/uploads` to the backend on port 5000.
 
 ---
 
@@ -1595,7 +1574,7 @@ apply to the **frontend on Vercel**.
 10. **Test** on desktop and mobile: both `http://` and `https://`, with and without `www`, the home page,
     login for each role, and a page refresh on a deep link such as `/admin`.
 
-**Backend domain:** with Vercel Services the site and the API share one domain, so the backend needs no
+**Backend domain:** the site and the API share one domain, so the backend needs no
 domain of its own. Only a backend on a separate server (option B, section 33) needs an address such as
 `api.<college-domain>.com`, created with the DNS record your server provider documents, and referenced in
 `frontend/vercel.json`.
@@ -1639,7 +1618,7 @@ Only those origins receive `Access-Control-Allow-Origin`. The wildcard `*` is ne
 | Setup | `CORS_ORIGINS` |
 |---|---|
 | Local development (Vite proxy) | empty |
-| Vercel Services (one domain) | empty |
+| Single Vercel project (one domain) | empty |
 | Frontend on Vercel rewriting to a separate backend (option B) | empty — the browser still sees one origin |
 | A browser app on another domain calling the API directly | that app's origin |
 
@@ -2180,7 +2159,7 @@ not release numbers.
 - Development tooling: `backend/scripts/dev-seed.mjs`, `backend/.env.example`, stronger `.gitignore`
 - Dependency update: Express 4.22.3, resolving two moderate `qs` advisories
 - First run now applies migrations immediately
-- Deployment: root `vercel.json` (Vercel Services), configurable `DATA_DIR`, CORS closed by default (`CORS_ORIGINS`), `JWT_SECRET` enforced in production, `trust proxy`, exported Express app
+- Deployment: single-project root `vercel.json` with the API as a Vercel Function, configurable `DATA_DIR`, CORS closed by default (`CORS_ORIGINS`), `JWT_SECRET` enforced in production, `trust proxy`, exported Express app
 
 ---
 

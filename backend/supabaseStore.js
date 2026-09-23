@@ -76,17 +76,20 @@ async function hydrate(shape) {
   const db = {};
   snapshot = new Map();
 
-  // Counters.
-  const { data: seqRows, error: seqError } = await supabase.from("cms_seq").select("key,value");
-  if (seqError) throw new Error(`cms_seq: ${seqError.message}`);
+  // Counters and singletons, fetched together rather than one after the other.
+  const [seqRes, singleRes] = await Promise.all([
+    supabase.from("cms_seq").select("key,value"),
+    supabase.from("cms_singletons").select("key,data"),
+  ]);
+  if (seqRes.error) throw new Error(`cms_seq: ${seqRes.error.message}`);
+  if (singleRes.error) throw new Error(`cms_singletons: ${singleRes.error.message}`);
   db.seq = { ...shape.seq };
-  seqRows.forEach((r) => {
+  seqRes.data.forEach((r) => {
     db.seq[r.key] = Number(r.value);
   });
 
   // Singletons.
-  const { data: singles, error: singleError } = await supabase.from("cms_singletons").select("key,data");
-  if (singleError) throw new Error(`cms_singletons: ${singleError.message}`);
+  const singles = singleRes.data;
   const singleMap = new Map(singles.map((r) => [r.key, r.data]));
   SINGLETON_KEYS.forEach((key) => {
     const stored = singleMap.get(key);
@@ -94,12 +97,24 @@ async function hydrate(shape) {
     else if (shape[key] !== undefined) db[key] = shape[key];
   });
 
-  // Collections.
-  for (const [name, value] of Object.entries(shape)) {
-    if (name === "seq" || SINGLETON_KEYS.includes(name)) continue;
-    if (!Array.isArray(value)) continue;
-    const table = name === "authSessions" ? "cms_auth_sessions" : tableOf(name);
-    const rows = await readAll(supabase, table);
+  /* Collections, all read at once.
+     Reading them one after another meant 45 round trips in a row and took
+     about 15 seconds for only a few hundred rows. That is longer than a
+     serverless platform allows a function to spend starting up, so the first
+     request after an idle period failed. The reads do not depend on each
+     other, so they run together. */
+  const collections = Object.entries(shape)
+    .filter(([name, value]) => name !== "seq" && !SINGLETON_KEYS.includes(name) && Array.isArray(value))
+    .map(([name]) => name);
+
+  const loaded = await Promise.all(
+    collections.map(async (name) => {
+      const table = name === "authSessions" ? "cms_auth_sessions" : tableOf(name);
+      return [name, await readAll(supabase, table)];
+    })
+  );
+
+  for (const [name, rows] of loaded) {
     db[name] = rows;
     snapshot.set(name, new Map(rows.map((r) => [keyOf(name, r), JSON.stringify(r)])));
   }

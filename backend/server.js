@@ -46,17 +46,33 @@ const app = express();
  * The database is loaded once, before the first request is served. Requests
  * that arrive during startup wait for it instead of seeing an empty database.
  */
-const storeReady = initStore()
-  .then((info) => {
-    // Seed accounts are checked after the data is in memory.
-    require("./routes/auth").ensureSeedUsers();
-    console.log(`  ▸ storage: ${info.mode === "supabase" ? "Supabase PostgreSQL" : `local file (${info.location})`}`);
-    return info;
-  })
-  .catch((e) => {
-    console.error("DATABASE STARTUP FAILED:", e.message);
-    throw e;
-  });
+let storePromise = null;
+
+/**
+ * A failed attempt is deliberately not remembered. A serverless instance is
+ * reused across requests, so caching the rejection would leave that instance
+ * answering 503 for the rest of its life after a single transient network or
+ * authentication error. Forgetting it lets the next request try again.
+ */
+function storeReady() {
+  if (storePromise) return storePromise;
+  storePromise = initStore()
+    .then((info) => {
+      // Seed accounts are checked after the data is in memory.
+      require("./routes/auth").ensureSeedUsers();
+      console.log(`  ▸ storage: ${info.mode === "supabase" ? "Supabase PostgreSQL" : `local file (${info.location})`}`);
+      return info;
+    })
+    .catch((e) => {
+      console.error("DATABASE STARTUP FAILED:", e.message);
+      storePromise = null;
+      throw e;
+    });
+  return storePromise;
+}
+
+// Start loading immediately rather than waiting for the first request.
+storeReady();
 
 // Behind a reverse proxy / hosting router, take the client IP from the first
 // X-Forwarded-For hop so audit logs and sessions record the real address.
@@ -78,7 +94,7 @@ app.use(express.json());
 // hosts (Vercel Functions) ignore. basename() blocks path traversal.
 // With Supabase configured the bytes come from the public bucket; locally
 // they come from the uploads folder, exactly as before.
-app.get("/uploads/:file", async (req, res) => {
+async function servePublicFile(req, res) {
   const name = path.basename(req.params.file);
   if (supabase.isEnabled()) {
     const found = await fileStore.get("public", name);
@@ -90,7 +106,14 @@ app.get("/uploads/:file", async (req, res) => {
   return res.sendFile(path.join(UPLOAD_DIR, name), (err) => {
     if (err && !res.headersSent) res.status(404).json({ error: "File not found." });
   });
-});
+}
+
+app.get("/uploads/:file", servePublicFile);
+// Same handler under /api, because a host that rewrites /uploads/* to a
+// serverless function does not reliably preserve the original path. The
+// rewrite in vercel.json targets this path, which carries the file name
+// itself, so the lookup cannot depend on what the platform does to req.url.
+app.get("/api/public-file/:file", servePublicFile);
 
 app.get("/api/health", (req, res) => res.json({ ok: true, service: "cms-backend" }));
 
@@ -107,7 +130,7 @@ app.use("/api", (req, res, next) => {
 
 // Nothing touches the database until it has finished loading.
 app.use("/api", (req, res, next) => {
-  storeReady.then(() => next()).catch(() => res.status(503).json({ error: "The service is starting up. Please try again in a moment." }));
+  storeReady().then(() => next()).catch(() => res.status(503).json({ error: "The service is starting up. Please try again in a moment." }));
 });
 
 app.use("/api/public", publicRoutes);
@@ -177,7 +200,7 @@ if (require.main === module) {
   const PORT = process.env.PORT || 5000;
   // Listen only once the database is loaded, so the first request cannot
   // arrive before the data is there.
-  storeReady
+  storeReady()
     .then(() => {
       app.listen(PORT, () => {
         console.log(`\n  College Management System API`);
