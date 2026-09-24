@@ -148,7 +148,11 @@ export default function PublicFooter({ college = {} }) {
               <li>
                 <button
                   onClick={() => navigate("/login")}
-                  className="mt-2 inline-flex items-center justify-center gap-2 px-4 min-h-[44px] rounded-xl text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 transition-colors w-full sm:w-auto"
+                  className="mt-2 inline-flex items-center justify-center gap-2 px-4 min-h-[44px] rounded-xl text-sm font-semibold text-white transition-colors w-full sm:w-auto hover:brightness-110"
+                  /* A fixed strong blue rather than bg-blue-600: the dark theme
+                     remaps that token to a light tint meant for TEXT, and white
+                     on it falls to 3.8:1. This reads the same in both themes. */
+                  style={{ background: "#1d4ed8" }}
                 >
                   <LogIn size={15} />
                   Student / Staff Portal

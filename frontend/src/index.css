@@ -72,6 +72,14 @@
   --color-blue-600: #5b83c4;
   --color-blue-700: #4a6bab;
 
+  /* The brand navy is a near-black used as TEXT on light surfaces: faculty
+     department badges, "View Profile", ranked marks, search result tags. On
+     a dark surface it is ink on ink and effectively invisible, so dark mode
+     gets a light variant of the same hue, mirroring the blue ramp above. */
+  --color-brand-600: #9db9e4;
+  --color-brand-500: #7f9fd2;
+  --color-brand-400: #b9cdee;
+
   --color-surface-base: #0a1220;
   --color-surface-raised: #111d33;
   --color-surface-sunken: #0d1729;

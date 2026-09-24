@@ -60,7 +60,7 @@ export default function PublicSports() {
                   <div className="text-sm font-semibold mt-2" style={{ color: "var(--color-text-primary)" }}>{s.sport}</div>
                   <div className="flex flex-wrap justify-center gap-1.5 mt-3">
                     {s.category && (
-                      <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold" style={{ background: "rgba(217,119,6,0.12)", color: "#b45309" }}>
+                      <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold" style={{ background: "var(--color-warning-subtle)", color: "var(--color-warning)" }}>
                         {s.category}
                       </span>
                     )}
