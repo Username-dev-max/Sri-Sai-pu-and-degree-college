@@ -27,7 +27,7 @@ export default function Contact({ college = {} }) {
           <div className="flex flex-col sm:flex-row flex-wrap items-center justify-center gap-4 sm:gap-8 mb-6">
             {rows.map((r, i) =>
               r.href ? (
-                <a key={i} href={r.href} className="flex items-center gap-2 text-sm font-medium hover:text-blue-600 transition-colors" style={{ color: "var(--color-text-secondary)" }}>
+                <a key={i} href={r.href} className="flex items-center gap-2 text-sm font-medium min-h-[44px] px-2 rounded-lg hover:text-blue-600 transition-colors" style={{ color: "var(--color-text-secondary)" }}>
                   <r.icon size={15} className="text-blue-600" /> {r.label}
                 </a>
               ) : (
