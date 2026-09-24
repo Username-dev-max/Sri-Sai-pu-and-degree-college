@@ -100,7 +100,7 @@ async function servePublicFile(req, res) {
     const found = await fileStore.get("public", name);
     if (!found) return res.status(404).json({ error: "File not found." });
     res.setHeader("Content-Type", found.contentType);
-    res.setHeader("Cache-Control", "public, max-age=3600");
+    res.setHeader("Cache-Control", "public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800");
     return res.send(found.buffer);
   }
   return res.sendFile(path.join(UPLOAD_DIR, name), (err) => {
@@ -120,7 +120,37 @@ app.get("/api/health", (req, res) => res.json({ ok: true, service: "cms-backend"
 // Authenticated responses must never be served from a cache: after logout,
 // the Back button or a shared proxy could otherwise redisplay the previous
 // user's data. The public site's endpoints are left cacheable.
+/*
+ * The public pages are read by everybody and change rarely, so their
+ * responses are cached at the edge instead of waking this function for
+ * every visitor. With tens of thousands of daily readers that is the
+ * difference between a handful of executions a minute and one per visitor.
+ *
+ * PUBLIC_CACHE_SECONDS sets how long the edge may serve a stored copy, and
+ * therefore how long an administrator waits to see a change on the public
+ * site. Sixty seconds is a deliberate middle: long enough to absorb a
+ * crowd, short enough that an edit is not lost for the afternoon. Set the
+ * variable to 0 to turn edge caching off entirely.
+ *
+ * stale-while-revalidate lets the edge keep answering from the stored copy
+ * while it fetches a fresh one behind the scenes, so a visitor never waits
+ * for a cold start just because the entry expired.
+ */
+const PUBLIC_CACHE_SECONDS = Number.isFinite(Number(process.env.PUBLIC_CACHE_SECONDS))
+  ? Math.max(0, Number(process.env.PUBLIC_CACHE_SECONDS))
+  : 60;
+
 app.use("/api", (req, res, next) => {
+  if (req.path.startsWith("/public")) {
+    // Only a plain read may be stored; anything else is passed through.
+    if (req.method === "GET" && PUBLIC_CACHE_SECONDS > 0) {
+      res.setHeader(
+        "Cache-Control",
+        `public, max-age=0, s-maxage=${PUBLIC_CACHE_SECONDS}, stale-while-revalidate=${PUBLIC_CACHE_SECONDS * 5}`
+      );
+    }
+    return next();
+  }
   if (!req.path.startsWith("/public")) {
     res.setHeader("Cache-Control", "no-store, private");
     res.setHeader("Pragma", "no-cache");
