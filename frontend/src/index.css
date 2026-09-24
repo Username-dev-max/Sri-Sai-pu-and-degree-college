@@ -358,6 +358,10 @@ body {
   }
 }
 
+/* The header is fixed, so a section scrolled to by an anchor would sit
+   underneath it. This reserves the header height above every anchor target. */
+section[id] { scroll-margin-top: 84px; }
+
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 

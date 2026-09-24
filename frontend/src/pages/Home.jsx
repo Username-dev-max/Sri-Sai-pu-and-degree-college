@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import client from "../api/client";
 import { useAuth } from "../context/AuthContext";
 import Loader from "../components/Loader";
@@ -27,6 +27,7 @@ export default function Home() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [params] = useSearchParams();
+  const { hash } = useLocation();
   const [data, setData] = useState(null);
   const [error, setError] = useState(false);
   // A search started from the navigation bar on another public page arrives
@@ -49,6 +50,21 @@ export default function Home() {
   useEffect(() => {
     load();
   }, []);
+
+  /* Arriving from another page as "/#contact": the section does not exist
+     until the data has rendered, so the scroll waits for it rather than
+     running against an empty page and finding nothing. */
+  useEffect(() => {
+    if (!data || !hash) return undefined;
+    // Images further down finish loading after the first scroll and push the
+    // page around, which left a section near the bottom short of where it
+    // should have landed. Scrolling again once things have settled corrects
+    // for that; it is a no-op when nothing moved.
+    const go = () => document.querySelector(hash)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    const timers = [setTimeout(go, 140), setTimeout(go, 700), setTimeout(go, 1400)];
+    return () => timers.forEach(clearTimeout);
+  }, [data, hash]);
+
 
   if (user) return null;
   if (error) return <ErrorState full message="Couldn't load the homepage. Please check your connection and try again." onRetry={load} />;

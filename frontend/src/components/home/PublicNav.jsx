@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Menu, X, Search, Sun, Moon, LogIn } from "lucide-react";
 import { useTheme } from "../../context/ThemeContext";
@@ -18,6 +18,7 @@ const LINKS = [
 
 export default function PublicNav({ collegeName, search, onSearch, transparent = false }) {
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const { theme, toggleTheme } = useTheme();
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -67,14 +68,35 @@ export default function PublicNav({ collegeName, search, onSearch, transparent =
     return () => window.removeEventListener("keydown", onKey);
   }, [mobileOpen]);
 
+  /**
+   * About, Academics and Contact point at sections of the home page, so they
+   * need two things the plain version did not do.
+   *
+   * Off the home page those sections do not exist, and querySelector simply
+   * found nothing — the link did nothing at all. Those now navigate home
+   * carrying the hash, and the home page scrolls once it has rendered.
+   *
+   * On a phone the menu closes at the same moment, and framer-motion
+   * animating its height to zero changed the layout mid-scroll, which
+   * cancelled the smooth scroll before it moved: measured scrollY 0 -> 0
+   * even though the section was 1240px down. Waiting for the menu to finish
+   * closing before scrolling fixes it.
+   */
   function goLink(href) {
+    const wasOpen = mobileOpen;
     setMobileOpen(false);
-    if (href.startsWith("#")) {
-      const el = document.querySelector(href);
-      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-    } else {
+
+    if (!href.startsWith("#")) {
       navigate(href);
+      return;
     }
+    if (pathname !== "/") {
+      navigate("/" + href);
+      return;
+    }
+    const scroll = () => document.querySelector(href)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (wasOpen) setTimeout(scroll, 280);
+    else scroll();
   }
 
   return (
