@@ -13,7 +13,7 @@ import usePrefersReducedMotion from "../hooks/usePrefersReducedMotion";
 
 const EYES_CLOSED = new Set(["password", "checking"]);
 
-export default function CatMascot({ state = "idle", pointer = { x: 0, y: 0 }, size = 360 }) {
+export default function CatMascot({ state = "idle", pointer = { x: 0, y: 0 }, size = 360, onPoke }) {
   const reduced = usePrefersReducedMotion();
   // Gradient ids must be unique per instance — duplicated ids across two
   // mounted copies make the second one resolve against a hidden <defs> and
@@ -24,6 +24,8 @@ export default function CatMascot({ state = "idle", pointer = { x: 0, y: 0 }, si
   const [blink, setBlink] = useState(false);
   const [glance, setGlance] = useState({ x: 0, y: 0 });
   const [earTwitch, setEarTwitch] = useState(false);
+  // Set briefly when the cat is tapped, so it can react before settling.
+  const [poked, setPoked] = useState(false);
   const timers = useRef([]);
 
   // Idle life: irregular blinking, occasional glances and ear twitches.
@@ -145,9 +147,43 @@ export default function CatMascot({ state = "idle", pointer = { x: 0, y: 0 }, si
     error: "M90 132 q10 -8 20 0",
   }[state] || "M92 128 q8 6 16 0";
 
+  function handlePoke() {
+    if (!onPoke) return;
+    onPoke();
+    setPoked(true);
+    const t = setTimeout(() => setPoked(false), 700);
+    timers.current.push(t);
+  }
+
+  const interactive = typeof onPoke === "function";
+
   return (
-    <div style={{ width: size, maxWidth: "100%" }} className="select-none" aria-hidden="true">
-      <motion.svg viewBox="0 0 200 230" width="100%" style={{ overflow: "visible", display: "block" }}>
+    <div
+      style={{ width: size, maxWidth: "100%" }}
+      className={`select-none ${interactive ? "cursor-pointer" : ""}`}
+      {...(interactive
+        ? {
+            role: "button",
+            tabIndex: 0,
+            "aria-label": "Pet the cat",
+            title: "Pet the cat",
+            onClick: handlePoke,
+            onKeyDown: (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                handlePoke();
+              }
+            },
+          }
+        : { "aria-hidden": "true" })}
+    >
+      <motion.svg
+        viewBox="0 0 200 230"
+        width="100%"
+        style={{ overflow: "visible", display: "block" }}
+        animate={reduced || !poked ? {} : { scale: [1, 1.06, 0.98, 1], rotate: [0, -2.5, 2, 0] }}
+        transition={{ duration: 0.65, ease: "easeOut" }}
+      >
         <defs>
           <linearGradient id={furId} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="#3d5a8a" />
@@ -188,14 +224,14 @@ export default function CatMascot({ state = "idle", pointer = { x: 0, y: 0 }, si
             <motion.path
               d="M64 92 L60 58 L92 76 z"
               fill={`url(#${furId})`}
-              animate={reduced ? {} : { rotate: earTwitch ? -9 : 0 }}
+              animate={reduced ? {} : { rotate: (earTwitch || poked) ? -9 : 0 }}
               style={{ transformOrigin: "72px 84px" }}
               transition={{ type: "spring", stiffness: 320, damping: 12 }}
             />
             <motion.path
               d="M136 92 L140 58 L108 76 z"
               fill={`url(#${furId})`}
-              animate={reduced ? {} : { rotate: earTwitch ? 9 : 0 }}
+              animate={reduced ? {} : { rotate: (earTwitch || poked) ? 9 : 0 }}
               style={{ transformOrigin: "128px 84px" }}
               transition={{ type: "spring", stiffness: 320, damping: 12 }}
             />

@@ -1,4 +1,5 @@
 import { motion } from "framer-motion";
+import CatMascot from "../CatMascot";
 import { CalendarCheck } from "lucide-react";
 import StaffFaces from "./StaffFaces";
 import usePrefersReducedMotion from "../../hooks/usePrefersReducedMotion";
@@ -8,11 +9,17 @@ import usePrefersReducedMotion from "../../hooks/usePrefersReducedMotion";
    panel on the left, the form on the right. The little shapes look away
    while a password is typed.
    ========================================================================= */
-export default function StaffStage({ brand, roles, form, uiState }) {
+export default function StaffStage({ brand, roles, form, uiState, pointer, onPoke }) {
   const reduced = usePrefersReducedMotion();
 
   return (
     <div className="w-full max-w-4xl mx-auto">
+      {/* The college mascot. Every sign-in page shows it, and on a phone it
+          sits above the card where the illustration panels cannot fit. */}
+      <div className="md:hidden flex flex-col items-center mb-5">
+        <CatMascot state={uiState} pointer={pointer} size={150} onPoke={onPoke} />
+      </div>
+
       <div className="grid md:grid-cols-2 rounded-3xl overflow-hidden shadow-2xl bg-white">
         {/* illustration panel */}
         <div className="relative hidden md:flex flex-col items-center justify-center gap-6 p-10 bg-gradient-to-br from-slate-100 to-slate-200">

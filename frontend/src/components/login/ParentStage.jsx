@@ -1,4 +1,5 @@
 import { motion } from "framer-motion";
+import CatMascot from "../CatMascot";
 import { Users2, ShieldCheck } from "lucide-react";
 import usePrefersReducedMotion from "../../hooks/usePrefersReducedMotion";
 
@@ -7,7 +8,7 @@ import usePrefersReducedMotion from "../../hooks/usePrefersReducedMotion";
    with a soft aurora behind it. The playful part is the sign-in button,
    which slides aside until both fields are filled (see RunawayButton).
    ========================================================================= */
-export default function ParentStage({ brand, roles, form, uiState }) {
+export default function ParentStage({ brand, roles, form, uiState, pointer, onPoke }) {
   const reduced = usePrefersReducedMotion();
 
   return (
@@ -29,6 +30,11 @@ export default function ParentStage({ brand, roles, form, uiState }) {
         </>
       )}
 
+      {/* The college mascot. Every sign-in page shows it, and on a phone it
+          sits above the card where the illustration panels cannot fit. */}
+      <div className="relative flex flex-col items-center mb-5">
+        <CatMascot state={uiState} pointer={pointer} size={170} onPoke={onPoke} />
+      </div>
       <motion.div
         initial={reduced ? false : { opacity: 0, y: 22 }}
         animate={{ opacity: 1, y: 0 }}

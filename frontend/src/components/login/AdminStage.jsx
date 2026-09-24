@@ -1,4 +1,5 @@
 import { motion } from "framer-motion";
+import CatMascot from "../CatMascot";
 import { ShieldCheck, Landmark, ScrollText } from "lucide-react";
 import usePrefersReducedMotion from "../../hooks/usePrefersReducedMotion";
 
@@ -11,11 +12,17 @@ import usePrefersReducedMotion from "../../hooks/usePrefersReducedMotion";
    college's own navy/gold identity and its own copy. One transform drives
    the blade, so it stays cheap.
    ========================================================================= */
-export default function AdminStage({ brand, roles, form, uiState }) {
+export default function AdminStage({ brand, roles, form, uiState, pointer, onPoke }) {
   const reduced = usePrefersReducedMotion();
 
   return (
     <div className="w-full max-w-5xl mx-auto">
+      {/* The college mascot. Every sign-in page shows it, and on a phone it
+          sits above the card where the illustration panels cannot fit. */}
+      <div className="flex flex-col items-center mb-5">
+        <CatMascot state={uiState} pointer={pointer} size={150} onPoke={onPoke} />
+      </div>
+
       <div className="relative grid lg:grid-cols-2 rounded-3xl overflow-hidden shadow-2xl bg-[#f7f4ee]">
         {/* left: editorial panel */}
         <div className="relative hidden lg:flex flex-col justify-between p-10 bg-gradient-to-br from-[#0d2a22] via-[#103128] to-[#0a1f19] text-white overflow-hidden">

@@ -334,7 +334,14 @@ export default function Login() {
       {/* The light stages render a white card in both themes, so the real
           light palette is restored inside it (see .light-surface). */}
       <div className={`relative z-10 w-full ${light ? "light-surface" : ""}`}>
-        <Stage brand={brand} roles={rolePills} form={form} uiState={uiState} pointer={pointer} />
+        <Stage
+          brand={brand}
+          roles={rolePills}
+          form={form}
+          uiState={uiState}
+          pointer={pointer}
+          onPoke={() => sounds.meow()}
+        />
       </div>
 
       <AnimatePresence>

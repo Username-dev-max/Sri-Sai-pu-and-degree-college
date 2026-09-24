@@ -20,7 +20,7 @@ const CAPTION = {
  * half of the layout — roughly 40% of the visual area on desktop and a
  * 210px band above the form on mobile, never overlapping the fields.
  */
-export default function StudentStage({ brand, roles, form, uiState, pointer }) {
+export default function StudentStage({ brand, roles, form, uiState, pointer, onPoke }) {
   const reduced = usePrefersReducedMotion();
   const compact = useIsMobile(1024);
 
@@ -32,10 +32,11 @@ export default function StudentStage({ brand, roles, form, uiState, pointer }) {
         transition={{ type: "spring", stiffness: 150, damping: 20 }}
         className="order-first flex flex-col items-center justify-center"
       >
-        <CatMascot state={uiState} pointer={pointer} size={compact ? 220 : 400} />
+        <CatMascot state={uiState} pointer={pointer} size={compact ? 220 : 400} onPoke={onPoke} />
         <p className="text-center text-blue-100/60 text-xs sm:text-sm mt-2 lg:mt-4 max-w-xs">
           {CAPTION[uiState] || CAPTION.idle}
         </p>
+        <p className="text-center text-blue-100/35 text-[11px] mt-1">Tap the cat</p>
       </motion.div>
 
       <motion.div
