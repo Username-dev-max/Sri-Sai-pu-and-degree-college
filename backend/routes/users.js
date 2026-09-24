@@ -178,7 +178,7 @@ router.post("/", (req, res) => {
 });
 
 // PATCH /api/users/:id/status — activate / deactivate.
-router.patch("/:id/status", (req, res) => {
+router.patch("/:id/status", async (req, res) => {
   const db = load();
   const user = db.users.find((u) => u.id === Number(req.params.id));
   if (!user) return res.status(404).json({ error: "Account not found." });
@@ -202,7 +202,7 @@ router.patch("/:id/status", (req, res) => {
   user.status = status;
   save(db);
   // Deactivation also closes the account's open sessions outright.
-  if (status === "Inactive") revokeUserSessions(user.id, { reason: "deactivated" });
+  if (status === "Inactive") await revokeUserSessions(user.id, { reason: "deactivated" }).catch(() => 0);
 
   audit(req, {
     action: status === "Active" ? "account.activated" : "account.deactivated",
@@ -225,7 +225,7 @@ router.patch("/:id/status", (req, res) => {
 });
 
 // POST /api/users/:id/reset-password — issue a fresh temporary password.
-router.post("/:id/reset-password", (req, res) => {
+router.post("/:id/reset-password", async (req, res) => {
   const db = load();
   const user = db.users.find((u) => u.id === Number(req.params.id));
   if (!user) return res.status(404).json({ error: "Account not found." });
@@ -235,7 +235,7 @@ router.post("/:id/reset-password", (req, res) => {
   user.mustReset = true;
   save(db);
   // Anyone still signed in with the old password is signed out now.
-  revokeUserSessions(user.id, { reason: "password-reset-by-admin" });
+  await revokeUserSessions(user.id, { reason: "password-reset-by-admin" }).catch(() => 0);
 
   audit(req, {
     action: "account.password_reset",

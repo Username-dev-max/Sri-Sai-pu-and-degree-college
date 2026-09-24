@@ -65,7 +65,7 @@ function ensureSeedUsers() {
 if (!require("../supabase").isEnabled()) ensureSeedUsers();
 
 // POST /api/auth/login  { username, password, role? }
-router.post("/login", (req, res) => {
+router.post("/login", async (req, res) => {
   const { username, password, role } = req.body || {};
   if (!username || !password) {
     return res.status(400).json({ error: "Username and password are required." });
@@ -95,7 +95,15 @@ router.post("/login", (req, res) => {
   user.lastLogin = new Date().toISOString();
   save(db);
 
-  const session = createSession(user, req);
+  let session;
+  try {
+    session = await createSession(user, req);
+  } catch (e) {
+    // Without a stored session the token would be rejected on the next
+    // request, so fail the sign-in plainly rather than issue a dead token.
+    console.error("SESSION CREATE FAILED:", e.message);
+    return res.status(503).json({ error: "Could not start your session. Please try again." });
+  }
   const token = signToken(user, session);
   res.json({
     token,
@@ -121,7 +129,7 @@ router.get("/me", verifyToken, (req, res) => {
 // Revokes the presented token's server-side session, so that token stops
 // working immediately — not only in this browser. Always answers 200: signing
 // out must never fail from the user's point of view.
-router.post("/logout", (req, res) => {
+router.post("/logout", async (req, res) => {
   const header = req.headers.authorization || "";
   const token = header.startsWith("Bearer ") ? header.slice(7) : null;
   let revoked = false;
@@ -131,7 +139,7 @@ router.post("/logout", (req, res) => {
       // token's session is still closed.
       const claims = jwt.verify(token, JWT_SECRET, { ignoreExpiration: true });
       if (claims.jti) {
-        revoked = revokeSession(claims.jti, "logout");
+        revoked = await revokeSession(claims.jti, "logout");
         if (revoked) {
           audit(
             { user: claims, ip: req.ip, headers: req.headers, socket: req.socket },
@@ -146,7 +154,7 @@ router.post("/logout", (req, res) => {
   res.json({ ok: true, revoked });
 });
 
-router.post("/change-password", verifyToken, (req, res) => {
+router.post("/change-password", verifyToken, async (req, res) => {
   const { currentPassword, newPassword } = req.body || {};
   if (!newPassword || newPassword.length < 6) {
     return res.status(400).json({ error: "New password must be at least 6 characters." });
@@ -164,7 +172,7 @@ router.post("/change-password", verifyToken, (req, res) => {
 
   // End every OTHER session for this account: a password change should cut
   // off anyone still holding access from the old password. This one continues.
-  const ended = revokeUserSessions(user.id, { exceptJti: req.session && req.session.jti, reason: "password-changed" });
+  const ended = await revokeUserSessions(user.id, { exceptJti: req.session && req.session.jti, reason: "password-changed" }).catch(() => 0);
   res.json({ ok: true, otherSessionsEnded: ended });
 });
 
