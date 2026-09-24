@@ -139,6 +139,53 @@
   --color-cyan-700: #67e8f9;
 }
 
+/*
+ * A surface that is deliberately light in BOTH themes.
+ *
+ * The dark theme remaps Tailwind neutral ramp above so that pages written
+ * with text-slate-900 and friends stay legible on dark surfaces. The login
+ * cards for Admin and Attendance Staff are white whichever theme is active,
+ * and --color-white is not remapped, so inside them text-slate-900 resolved
+ * to near-white on white: the fields were invisible in dark mode.
+ *
+ * This restores the real light values for everything the compatibility layer
+ * changes, scoped to the element it is placed on, so those cards can keep
+ * using ordinary utility classes. color-scheme keeps the browser own form
+ * and autofill rendering light to match.
+ */
+.light-surface {
+  --color-slate-50: #f8fafc;
+  --color-slate-100: #f1f5f9;
+  --color-slate-200: #e2e8f0;
+  --color-slate-300: #cbd5e1;
+  --color-slate-400: #94a3b8;
+  --color-slate-500: #64748b;
+  --color-slate-600: #475569;
+  --color-slate-700: #334155;
+  --color-slate-800: #1e293b;
+  --color-slate-900: #0f172a;
+
+  /* The navy brand remap from @theme, not Tailwind default blue. */
+  --color-blue-400: #3b5998;
+  --color-blue-500: #1f3868;
+  --color-blue-600: #14213d;
+  --color-blue-700: #0d1730;
+
+  --color-blue-50: #eff6ff;
+  --color-green-50: #f0fdf4;
+  --color-green-700: #15803d;
+  --color-red-50: #fef2f2;
+  --color-red-700: #b91c1c;
+  --color-purple-50: #faf5ff;
+  --color-purple-700: #7e22ce;
+  --color-amber-50: #fffbeb;
+  --color-amber-700: #b45309;
+  --color-cyan-50: #ecfeff;
+  --color-cyan-700: #0e7490;
+
+  color-scheme: light;
+}
+
 /* smooth, controlled theme transition (excluded for reduced-motion users below) */
 body,
 .glass,
