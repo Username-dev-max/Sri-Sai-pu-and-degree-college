@@ -76,7 +76,7 @@ function seed() {
     ],
     // Real 35-member faculty roster. No email/phone was supplied for any of
     // these — left blank rather than invented (see routes/faculty.js, which
-    // no longer requires them). Two records ("Umesh Sir", "Shrimati Roy M")
+    // no longer requires them). Two records ("Umesh Sir", "Roy M")
     // had no clear subject/experience/qualification in the source list and
     // are marked "[VERIFY]" rather than guessed.
     faculty: [
@@ -111,7 +111,7 @@ function seed() {
       { id: "F029", name: "Rashmitha", email: "", phone: "", department: "DEP08", designation: "Assistant Professor", qualification: "M.Sc, B.Ed", experience: "8 Years" },
       { id: "F030", name: "Sumithra V", email: "", phone: "", department: "DEP03", designation: "Assistant Professor", qualification: "M.A, B.Ed", experience: "15 Years" },
       { id: "F031", name: "Umesh Sir", email: "", phone: "", department: "", designation: "[VERIFY]", qualification: "[VERIFY]", experience: "[VERIFY]" },
-      { id: "F032", name: "Shrimati Roy M", email: "", phone: "", department: "", designation: "[VERIFY]", qualification: "[VERIFY]", experience: "[VERIFY]" },
+      { id: "F032", name: "Roy M", email: "", phone: "", department: "", designation: "[VERIFY]", qualification: "[VERIFY]", experience: "[VERIFY]" },
       { id: "F033", name: "Shanmuga V", email: "", phone: "", department: "DEP12", designation: "Assistant Professor", qualification: "M.P.Ed", experience: "6 Years" },
       { id: "F034", name: "K. Pavithra Ravi", email: "", phone: "", department: "DEP07", designation: "Assistant Professor", qualification: "MCA", experience: "10 Years" },
       { id: "F035", name: "Swathi Kamalini M", email: "", phone: "", department: "DEP07", designation: "Assistant Professor", qualification: "M.Tech", experience: "3 Years" },

@@ -16,7 +16,7 @@ export default function AchievementsTeaser({ academicMerit = [] }) {
             {examLabel && <div className="text-xs font-semibold uppercase tracking-widest text-amber-400 mb-2">{examLabel}</div>}
             <h2 className="font-display text-2xl sm:text-3xl font-semibold text-white">1st Place in K.G.F. Taluk</h2>
             <p className="text-sm text-blue-100/70 mt-3">Academic Achievement</p>
-            <button onClick={() => navigate("/achievements")} className="text-sm font-semibold text-amber-400 hover:text-amber-300 mt-6 inline-block">
+            <button onClick={() => navigate("/achievements")} className="group text-sm font-semibold text-amber-400 hover:text-amber-300 mt-4 inline-flex items-center gap-1.5 min-h-[44px] px-1 transition-colors">
               View all meritorious students →
             </button>
           </div>

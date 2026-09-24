@@ -18,7 +18,7 @@ export default function SportsExcellence({ sportsAchievements = [] }) {
               State-level sporting achievements
             </h2>
           </div>
-          <button onClick={() => navigate("/sports")} className="text-sm font-semibold text-amber-400 hover:text-amber-300">
+          <button onClick={() => navigate("/sports")} className="group text-sm font-semibold text-amber-400 hover:text-amber-300 inline-flex items-center gap-1.5 min-h-[44px] px-1 transition-colors">
             View all achievements →
           </button>
         </div>

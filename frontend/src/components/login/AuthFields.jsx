@@ -121,7 +121,7 @@ export default function AuthFields({
           <button
             type="button"
             onClick={onToggleShowPw}
-            className={`absolute right-3 top-1/2 -translate-y-1/2 ${tone === "dark" ? "text-white/40 hover:text-white/80" : "text-slate-400 hover:text-slate-600"}`}
+            className={`absolute right-1 top-1/2 -translate-y-1/2 w-11 h-11 flex items-center justify-center rounded-lg ${tone === "dark" ? "text-white/40 hover:text-white/80" : "text-slate-400 hover:text-slate-600"}`}
             aria-label={showPw ? "Hide password" : "Show password"}
             aria-pressed={showPw}
           >
@@ -141,7 +141,7 @@ export default function AuthFields({
           />
           Remember me
         </label>
-        <button type="button" onClick={onForgot} className={t.link}>
+        <button type="button" onClick={onForgot} className={`${t.link} min-h-[44px] px-1`}>
           Forgot password?
         </button>
       </div>

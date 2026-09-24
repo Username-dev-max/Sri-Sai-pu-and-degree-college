@@ -16,6 +16,34 @@ const POSTERS = [
   { src: "/campus/toppers-degree-2025.jpg", caption: "Degree results announcement — Final Year BCA and B.Com toppers" },
 ];
 
+/*
+ * The first three places in each list get a medal rather than a plain
+ * number. A ranked list is the point of this page, so the top of it should
+ * be readable at a glance; everyone else keeps an ordinary numeral so the
+ * emphasis stays meaningful.
+ */
+const MEDALS = {
+  1: { ring: "#d4a017", bg: "rgba(212,160,23,0.14)", label: "1st" },
+  2: { ring: "#94a3b8", bg: "rgba(148,163,184,0.16)", label: "2nd" },
+  3: { ring: "#b87333", bg: "rgba(184,115,51,0.14)", label: "3rd" },
+};
+
+function RankMedal({ place }) {
+  const m = MEDALS[place];
+  if (!m) {
+    return <span className="inline-flex w-8 justify-center tabular-nums" style={{ color: "var(--color-text-muted)" }}>{place}</span>;
+  }
+  return (
+    <span
+      title={m.label}
+      className="inline-flex w-8 h-8 items-center justify-center rounded-full text-[11px] font-bold tabular-nums transition-transform duration-200 group-hover:scale-110"
+      style={{ background: m.bg, color: m.ring, border: `1px solid ${m.ring}` }}
+    >
+      {place}
+    </span>
+  );
+}
+
 export default function PublicAchievements() {
   const [data, setData] = useState(null);
   const [error, setError] = useState(false);
@@ -100,17 +128,19 @@ export default function PublicAchievements() {
                           .slice()
                           .sort((a, b) => b.marks - a.marks)
                           .map((m, i) => (
-                            <TableRow key={m.id}>
-                              <TableTd>{i + 1}</TableTd>
+                            <TableRow key={m.id} className="group">
+                              <TableTd>
+                                <RankMedal place={i + 1} />
+                              </TableTd>
                               <TableTd className="font-medium" style={{ color: "var(--color-text-primary)" }}>
-                                {m.name}
+                                <span className="transition-transform duration-200 inline-block group-hover:translate-x-0.5">{m.name}</span>
                                 {m.detail && (
                                   <span className="block text-xs font-normal mt-0.5" style={{ color: "var(--color-text-muted)" }}>
                                     {m.detail}
                                   </span>
                                 )}
                               </TableTd>
-                              <TableTd align="right" className="font-semibold" style={{ color: "var(--color-brand-600)" }}>{m.marks}</TableTd>
+                              <TableTd align="right" className="font-semibold tabular-nums" style={{ color: "var(--color-brand-600)" }}>{m.marks}</TableTd>
                             </TableRow>
                           ))}
                       </TableBody>

@@ -16,7 +16,7 @@ export default function DepartmentsStrip({ departments = [] }) {
               Subjects taught across the college
             </h2>
           </div>
-          <button onClick={() => navigate("/departments")} className="text-sm font-semibold text-blue-600 hover:text-blue-700">
+          <button onClick={() => navigate("/departments")} className="group inline-flex items-center gap-1 text-sm font-semibold text-blue-600 hover:text-blue-700 min-h-[44px] px-1 transition-colors">
             Vision &amp; Mission →
           </button>
         </div>

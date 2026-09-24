@@ -48,7 +48,7 @@ export default function AdmissionsCTA({ courses = [] }) {
           </p>
           <p className="text-blue-100/50 text-sm">
             Already enrolled?{" "}
-            <a href="/login" className="text-blue-300 hover:text-blue-200 font-medium">
+            <a href="/login" className="text-blue-300 hover:text-blue-200 font-medium underline underline-offset-4 decoration-blue-400/40 hover:decoration-blue-300 inline-flex items-center min-h-[44px] px-0.5 transition-colors">
               Sign in to your portal
             </a>{" "}
             instead.

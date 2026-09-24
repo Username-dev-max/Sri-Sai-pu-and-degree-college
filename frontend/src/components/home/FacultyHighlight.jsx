@@ -21,7 +21,7 @@ export default function FacultyHighlight({ faculty = [], departments = [] }) {
               Experienced educators across every subject
             </h2>
           </div>
-          <button onClick={() => navigate("/faculty-directory")} className="text-sm font-semibold text-blue-600 hover:text-blue-700">
+          <button onClick={() => navigate("/faculty-directory")} className="group inline-flex items-center gap-1 text-sm font-semibold text-blue-600 hover:text-blue-700 min-h-[44px] px-1 transition-colors">
             View all {faculty.length} faculty →
           </button>
         </div>

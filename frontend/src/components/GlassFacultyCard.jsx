@@ -37,7 +37,7 @@ export default function GlassFacultyCard({ faculty, deptName, delay = 0 }) {
       )}
       <button
         onClick={() => navigate(`/faculty-directory/${faculty.id}`)}
-        className="mt-4 w-full text-xs font-semibold pt-3 border-t"
+        className="mt-4 w-full text-xs font-semibold pt-3 border-t min-h-[44px] transition-colors hover:text-blue-700"
         style={{ color: "var(--color-brand-600)", borderColor: "var(--color-border-subtle)" }}
       >
         View Profile

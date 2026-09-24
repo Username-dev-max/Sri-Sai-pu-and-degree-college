@@ -15,7 +15,7 @@ export default function GalleryPreview({ gallery = [] }) {
       <div className="max-w-7xl mx-auto">
         <div className="flex items-end justify-between mb-8 flex-wrap gap-4">
           <h2 className="font-display text-2xl sm:text-3xl font-semibold tracking-tight" style={{ color: "var(--color-text-primary)" }}>Campus Gallery</h2>
-          <button onClick={() => navigate("/gallery")} className="text-sm font-semibold text-blue-600 hover:text-blue-700">
+          <button onClick={() => navigate("/gallery")} className="group inline-flex items-center gap-1 text-sm font-semibold text-blue-600 hover:text-blue-700 min-h-[44px] px-1 transition-colors">
             View full gallery →
           </button>
         </div>
