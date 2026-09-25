@@ -29,6 +29,7 @@ function seed() {
       { id: "DEP10", name: "Chemistry", code: "CHE", hod: "", vision: "", mission: "" },
       { id: "DEP11", name: "Biology", code: "BIO", hod: "", vision: "", mission: "" },
       { id: "DEP12", name: "Physical Education", code: "PE", hod: "", vision: "", mission: "" },
+      { id: "DEP13", name: "BCA AI", code: "BCAAI", hod: "", vision: "", mission: "" },
     ],
     /* Combinations and degree programs the college actually offers, taken
        from its own published admission posters. `active` is what the

@@ -88,8 +88,34 @@ router.get("/teams/:id", (req, res) => {
   const db = load();
   const team = db.teams.find((t) => t.id === req.params.id);
   if (!team) return res.status(404).json({ error: "Team not found." });
-  const members = db.teamMembers.filter((m) => m.team === team.id);
+  const members = db.teamMembers
+    .filter((m) => m.team === team.id)
+    .map((m) => {
+      const dept = db.departments.find((d) => d.id === m.department);
+      return { ...m, departmentName: dept ? dept.name : m.department };
+    });
   res.json({ team, members });
+});
+
+/*
+ * One team member, for the public hiring profile. Only the fields that are
+ * meant to be seen are returned, and the department id is resolved to its
+ * name so the page does not have to know the academic structure.
+ */
+router.get("/team-members/:id", (req, res) => {
+  const db = load();
+  const m = (db.teamMembers || []).find((x) => x.id === req.params.id);
+  if (!m) return res.status(404).json({ error: "Member not found." });
+  const team = db.teams.find((t) => t.id === m.team) || null;
+  const dept = db.departments.find((d) => d.id === m.department);
+  res.json({
+    member: {
+      id: m.id, name: m.name, role: m.role, year: m.year, email: m.email,
+      photoUrl: m.photoUrl, resumeUrl: m.resumeUrl, resumeName: m.resumeName,
+      department: m.department, departmentName: dept ? dept.name : m.department,
+    },
+    team: team ? { id: team.id, name: team.name, description: team.description } : null,
+  });
 });
 
 router.post("/admissions-inquiry", (req, res) => {

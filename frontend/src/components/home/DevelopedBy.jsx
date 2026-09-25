@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Users2 } from "lucide-react";
+import { Users2, Briefcase, ArrowRight } from "lucide-react";
 import client from "../../api/client";
 
 export default function DevelopedBy() {
@@ -22,6 +22,18 @@ export default function DevelopedBy() {
           <h2 className="font-display text-3xl sm:text-4xl font-semibold tracking-tight" style={{ color: "var(--color-text-primary)" }}>
             The teams behind this system
           </h2>
+          <p className="text-sm mt-3" style={{ color: "var(--color-text-secondary)" }}>
+            Every member has a profile with their department, year and resume.
+          </p>
+          <button
+            onClick={() => navigate("/teams")}
+            className="group inline-flex items-center gap-2 mt-5 px-5 min-h-[44px] rounded-xl text-sm font-semibold text-white transition-all hover:brightness-110"
+            style={{ background: "#1d4ed8" }}
+          >
+            <Briefcase size={16} />
+            Hire from our teams
+            <ArrowRight size={15} className="transition-transform group-hover:translate-x-0.5" />
+          </button>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-5">
           {teams.map((t, i) => (

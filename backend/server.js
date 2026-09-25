@@ -171,7 +171,7 @@ app.use("/api/sports-achievements", genericCrud("sportsAchievements", "SPT", ["A
 app.use("/api/academic-merit", genericCrud("academicMerit", "MER", ["Admin"]));
 app.use("/api/gallery", genericCrud("galleryItems", "GAL", ["Admin"]));
 app.use("/api/teams", genericCrud("teams", "TEAM", ["Admin"]));
-app.use("/api/team-members", genericCrud("teamMembers", "MEM", ["Admin"]));
+app.use("/api/team-members", require("./routes/teamMembers"));
 
 app.use("/api/auth", authRoutes);
 

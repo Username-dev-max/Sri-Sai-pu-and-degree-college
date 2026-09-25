@@ -54,6 +54,7 @@ const DepartmentsPublic = lazy(() => import("./pages/DepartmentsPublic"));
 const DepartmentProfile = lazy(() => import("./pages/DepartmentProfile"));
 const TeamsPublic = lazy(() => import("./pages/TeamsPublic"));
 const TeamProfile = lazy(() => import("./pages/TeamProfile"));
+const TeamMemberProfile = lazy(() => import("./pages/TeamMemberProfile"));
 const TeamsAdmin = lazy(() => import("./pages/TeamsAdmin"));
 const TeamMembersAdmin = lazy(() => import("./pages/TeamMembersAdmin"));
 
@@ -104,6 +105,7 @@ function AnimatedRoutes() {
         <Route path="/departments/:id" element={<Suspense fallback={<Loader full label="Loading…" />}><DepartmentProfile /></Suspense>} />
         <Route path="/teams" element={<Suspense fallback={<Loader full label="Loading…" />}><TeamsPublic /></Suspense>} />
         <Route path="/teams/:id" element={<Suspense fallback={<Loader full label="Loading…" />}><TeamProfile /></Suspense>} />
+        <Route path="/members/:id" element={<Suspense fallback={<Loader full label="Loading…" />}><TeamMemberProfile /></Suspense>} />
 
         {/* Admin */}
         <Route path="/admin" element={<Wrapped role="Admin" title="Admin Dashboard"><AdminDashboard /></Wrapped>} />

@@ -14,12 +14,24 @@ export default function GlassFacultyCard({ faculty, deptName, delay = 0 }) {
       whileHover={{ y: -3 }}
       className="glass glow-card rounded-2xl p-5 text-center shadow-sm"
     >
-      <div
-        className="w-16 h-16 rounded-full mx-auto mb-3 flex items-center justify-center"
-        style={{ background: "var(--color-surface-sunken)", border: "1px dashed var(--color-border-default)" }}
-      >
-        <UserRound size={24} style={{ color: "var(--color-text-muted)" }} />
-      </div>
+      {/* A photograph when one has been recorded, and the same sized neutral
+          mark when it has not, so a row of cards stays aligned either way. */}
+      {faculty.photoUrl ? (
+        <img
+          src={faculty.photoUrl}
+          alt={faculty.name}
+          loading="lazy"
+          className="w-[88px] h-[88px] rounded-full mx-auto mb-3 object-cover"
+          style={{ border: "1px solid var(--color-border-subtle)" }}
+        />
+      ) : (
+        <div
+          className="w-[88px] h-[88px] rounded-full mx-auto mb-3 flex items-center justify-center"
+          style={{ background: "var(--color-surface-sunken)", border: "1px dashed var(--color-border-default)" }}
+        >
+          <UserRound size={34} style={{ color: "var(--color-text-muted)" }} />
+        </div>
+      )}
       <div className="font-semibold text-sm" style={{ color: "var(--color-text-primary)" }}>{faculty.name}</div>
       <div className="inline-flex items-center gap-1 mt-2 px-2.5 py-1 rounded-full text-xs font-semibold" style={{ background: "rgba(37,99,235,0.1)", color: "var(--color-brand-600)" }}>
         {deptName ? deptName(faculty.department) : faculty.department}

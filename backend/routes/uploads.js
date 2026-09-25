@@ -62,6 +62,38 @@ router.post("/", (req, res) => {
   });
 });
 
+/*
+ * POST /api/uploads/resume — a resume that has to be publicly downloadable.
+ *
+ * This is deliberately separate from the private document route. A resume on
+ * the hiring pages is meant to be opened by someone who is not signed in, so
+ * it goes to the public bucket and gets a real URL. That also means it is
+ * readable by anyone who has the link, which is the point, but it is why it
+ * is its own route rather than a quiet widening of the image upload: the
+ * choice to publish somebody personal details should be explicit.
+ */
+const resumeUpload = uploader({ ".pdf": "application/pdf" }, 6, "A resume must be a PDF, no larger than 6 MB.");
+
+router.post("/resume", (req, res) => {
+  resumeUpload(req, res, async (err) => {
+    if (err) return res.status(400).json({ error: err.message });
+    if (!req.file) return res.status(400).json({ error: "No file uploaded." });
+    try {
+      const name = uniqueName("resume", req.file.originalname);
+      await fileStore.put("public", name, req.file.buffer, "application/pdf");
+      res.status(201).json({
+        url: fileStore.publicUrl(name),
+        storedName: name,
+        originalName: req.file.originalname,
+        bytes: req.file.size,
+      });
+    } catch (e) {
+      console.error("resume upload failed:", e.message);
+      res.status(500).json({ error: "Could not store the resume." });
+    }
+  });
+});
+
 /* ------------------------------------------------------------------------
    Private uploads — student documents, official PDFs.
 
