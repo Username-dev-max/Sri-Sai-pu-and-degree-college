@@ -92,9 +92,18 @@ export default function Topbar({ title, onMenuClick }) {
             aria-expanded={open}
             className="flex items-center gap-2 pl-1.5 pr-2.5 py-1.5 rounded-full hover:bg-black/5 transition-colors"
           >
-            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 text-white flex items-center justify-center text-xs font-bold">
-              {user?.name?.[0] || "U"}
-            </div>
+            {user?.photoUrl ? (
+              <img
+                src={user.photoUrl}
+                alt=""
+                className="w-7 h-7 rounded-full object-cover"
+                style={{ border: "1px solid var(--color-border-subtle)" }}
+              />
+            ) : (
+              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 text-white flex items-center justify-center text-xs font-bold">
+                {user?.name?.[0] || "U"}
+              </div>
+            )}
             <span className="hidden sm:block text-sm font-medium max-w-[120px] truncate" style={{ color: "var(--color-text-secondary)" }}>
               {user?.name}
             </span>

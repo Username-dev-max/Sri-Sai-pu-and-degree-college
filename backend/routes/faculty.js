@@ -53,6 +53,21 @@ router.get("/:id", (req, res) => {
   res.json({ faculty: projectFaculty(fac, req.user) });
 });
 
+/**
+ * A photograph must be one this application stored. Accepting any address
+ * would let a profile point at somebody elses server, which then sees every
+ * visitor who loads the directory.
+ */
+function ourFile(url) {
+  const u = String(url || "").trim();
+  if (!u) return true;
+  return (
+    u.startsWith("/uploads/") ||
+    u.startsWith("/campus/") ||
+    (process.env.SUPABASE_URL && u.startsWith(process.env.SUPABASE_URL + "/storage/"))
+  );
+}
+
 // POST /api/faculty  (Admin only) — Enroll a new faculty member with a linked login.
 router.post("/", requireRole("Admin"), (req, res) => {
   const db = load();
@@ -67,11 +82,13 @@ router.post("/", requireRole("Admin"), (req, res) => {
       return res.status(409).json({ error: "A faculty member with this email already exists." });
     }
   }
+  if (!ourFile(b.photoUrl)) return res.status(400).json({ error: "Upload the photograph here rather than linking to another site." });
   db.seq.faculty = (db.seq.faculty || 0) + 1;
   const facId = `F${String(db.seq.faculty).padStart(3, "0")}`;
   const faculty = {
     id: facId, name: b.name, email: b.email || "", phone: b.phone || "", department: b.department,
     designation: b.designation, qualification: b.qualification || "", experience: b.experience || "",
+    photoUrl: b.photoUrl || "",
   };
   db.faculty.push(faculty);
   const { user, plainPassword } = createUserAccount(db, { name: b.name, role: "Faculty", linkedId: facId, email: b.email });
@@ -98,7 +115,8 @@ router.put("/:id", requireRole("Admin"), (req, res) => {
   const db = load();
   const fac = db.faculty.find((f) => f.id === req.params.id);
   if (!fac) return res.status(404).json({ error: "Faculty not found." });
-  const editable = ["name", "email", "phone", "department", "designation", "qualification", "experience"];
+  if (!ourFile(req.body.photoUrl)) return res.status(400).json({ error: "Upload the photograph here rather than linking to another site." });
+  const editable = ["name", "email", "phone", "department", "designation", "qualification", "experience", "photoUrl"];
   editable.forEach((f) => { if (req.body[f] !== undefined) fac[f] = req.body[f]; });
   save(db);
   res.json({ faculty: fac });

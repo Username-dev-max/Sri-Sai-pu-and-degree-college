@@ -35,6 +35,7 @@ function publicUser(u, db) {
     username: u.username,
     role: u.role,
     name: u.name,
+    photoUrl: u.photoUrl || "",
     email: u.email || "",
     status: u.status || "Active",
     linkedId: u.linkedId || null,

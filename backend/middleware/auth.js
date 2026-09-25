@@ -135,6 +135,11 @@ async function verifyToken(req, res, next) {
     role: account.role,
     linkedId: account.linkedId,
     linkedIds: account.linkedIds || (account.linkedId ? [account.linkedId] : []),
+    // Read from the stored record rather than the token, so a photo changed
+    // just now appears without signing in again.
+    name: account.name,
+    email: account.email || "",
+    photoUrl: account.photoUrl || "",
   };
   req.session = session;
   next();

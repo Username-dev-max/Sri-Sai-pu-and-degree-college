@@ -45,12 +45,21 @@ export default function FacultyProfile() {
             <Loader label="Loading profile…" />
           ) : (
             <div className="glass glow-soft rounded-2xl p-8 text-center shadow-sm">
-              <div
-                className="w-24 h-24 rounded-full mx-auto mb-4 flex items-center justify-center"
-                style={{ background: "var(--color-surface-sunken)", border: "1px dashed var(--color-border-default)" }}
-              >
-                <UserRound size={36} style={{ color: "var(--color-text-muted)" }} />
-              </div>
+              {faculty.photoUrl ? (
+                <img
+                  src={faculty.photoUrl}
+                  alt={faculty.name}
+                  className="w-28 h-28 rounded-full mx-auto mb-4 object-cover"
+                  style={{ border: "1px solid var(--color-border-subtle)" }}
+                />
+              ) : (
+                <div
+                  className="w-28 h-28 rounded-full mx-auto mb-4 flex items-center justify-center"
+                  style={{ background: "var(--color-surface-sunken)", border: "1px dashed var(--color-border-default)" }}
+                >
+                  <UserRound size={40} style={{ color: "var(--color-text-muted)" }} />
+                </div>
+              )}
               <h1 className="font-display text-2xl font-semibold" style={{ color: "var(--color-text-primary)" }}>{faculty.name}</h1>
               <p className="text-sm mt-1" style={{ color: "var(--color-text-secondary)" }}>{publicText(faculty.designation, "")}</p>
 

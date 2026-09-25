@@ -28,7 +28,7 @@ router.get("/overview", (req, res) => {
     },
     departments: db.departments.map((d) => ({ id: d.id, name: d.name, code: d.code, hod: d.hod, vision: d.vision || "", mission: d.mission || "" })),
     courses: db.courses.map((c) => ({ id: c.id, name: c.name, department: c.department, duration: c.duration, semesters: c.semesters })),
-    faculty: db.faculty.map((f) => ({ id: f.id, name: f.name, department: f.department, designation: f.designation, qualification: f.qualification, experience: f.experience })),
+    faculty: db.faculty.map((f) => ({ id: f.id, name: f.name, department: f.department, designation: f.designation, qualification: f.qualification, experience: f.experience, photoUrl: f.photoUrl || "" })),
     notices: db.notices
       .slice()
       .sort((a, b) => new Date(b.date) - new Date(a.date))
@@ -56,7 +56,7 @@ router.get("/faculty", (req, res) => {
   }
   if (department) list = list.filter((f) => f.department === department);
   res.json({
-    faculty: list.map((f) => ({ id: f.id, name: f.name, department: f.department, designation: f.designation, qualification: f.qualification, experience: f.experience })),
+    faculty: list.map((f) => ({ id: f.id, name: f.name, department: f.department, designation: f.designation, qualification: f.qualification, experience: f.experience, photoUrl: f.photoUrl || "" })),
   });
 });
 
@@ -66,7 +66,7 @@ router.get("/faculty/:id", (req, res) => {
   if (!f) return res.status(404).json({ error: "Faculty not found." });
   const dept = db.departments.find((d) => d.id === f.department);
   res.json({
-    faculty: { id: f.id, name: f.name, department: f.department, departmentName: dept?.name || "", designation: f.designation, qualification: f.qualification, experience: f.experience },
+    faculty: { id: f.id, name: f.name, department: f.department, departmentName: dept?.name || "", designation: f.designation, qualification: f.qualification, experience: f.experience, photoUrl: f.photoUrl || "" },
   });
 });
 

@@ -6,6 +6,7 @@ const { load, save, seed } = require("../db");
 const {
   signToken,
   verifyToken,
+  requireRole,
   createSession,
   revokeSession,
   revokeUserSessions,
@@ -116,6 +117,7 @@ router.post("/login", async (req, res) => {
       linkedId: user.linkedId,
       linkedIds: user.linkedIds || (user.linkedId ? [user.linkedId] : []),
       email: user.email,
+      photoUrl: user.photoUrl || "",
       mustReset: !!user.mustReset,
     },
   });
@@ -123,6 +125,64 @@ router.post("/login", async (req, res) => {
 
 router.get("/me", verifyToken, (req, res) => {
   res.json({ user: req.user });
+});
+
+/**
+ * PUT /api/auth/me — change your own name, email and photograph.
+ *
+ * Separate from the admin account routes: this only ever touches the
+ * signed-in account, so it cannot be used to edit somebody else. Role,
+ * username and linked records are deliberately not editable here — those
+ * decide what the account can reach, and belong to an administrator.
+ */
+router.put("/me", verifyToken, requireRole("Admin"), (req, res) => {
+  const db = load();
+  const user = db.users.find((u) => u.id === req.user.id);
+  if (!user) return res.status(404).json({ error: "Account not found." });
+
+  const b = req.body || {};
+
+  if (b.name !== undefined) {
+    const name = String(b.name).trim();
+    if (!name) return res.status(400).json({ error: "A name is required." });
+    if (name.length > 80) return res.status(400).json({ error: "That name is too long." });
+    user.name = name;
+  }
+
+  if (b.email !== undefined) {
+    const email = String(b.email).trim();
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ error: "That email address does not look right." });
+    }
+    user.email = email;
+  }
+
+  if (b.photoUrl !== undefined) {
+    const url = String(b.photoUrl).trim();
+    // Only a file this application stored. Accepting any address would let a
+    // profile point at somebody else's server, which then sees every visitor
+    // who loads the page.
+    const ours = url === "" || url.startsWith("/uploads/") || url.startsWith("/campus/") ||
+      (process.env.SUPABASE_URL && url.startsWith(`${process.env.SUPABASE_URL}/storage/`));
+    if (!ours) return res.status(400).json({ error: "Upload the photo here rather than linking to another site." });
+    user.photoUrl = url;
+  }
+
+  save(db);
+  audit(req, {
+    action: "account.profile_updated",
+    entityType: "user",
+    entityId: user.id,
+    summary: `${user.username} updated their own profile`,
+  });
+  res.json({
+    user: {
+      id: user.id, username: user.username, role: user.role, name: user.name,
+      email: user.email || "", photoUrl: user.photoUrl || "",
+      linkedId: user.linkedId, linkedIds: user.linkedIds || [],
+      mustReset: !!user.mustReset,
+    },
+  });
 });
 
 // POST /api/auth/logout

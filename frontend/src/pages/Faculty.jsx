@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { motion } from "framer-motion";
-import { Plus, Search, Pencil, Trash2, KeyRound } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, KeyRound , Upload, UserRound } from "lucide-react";
 import client from "../api/client";
 import { useData } from "../context/DataContext";
 import { useToast } from "../context/ToastContext";
@@ -13,7 +13,7 @@ import Button from "../components/Button";
 import EmptyState from "../components/EmptyState";
 import { Table, TableHead, TableTh, TableBody, TableTd } from "../components/Table";
 
-const BLANK = { name: "", email: "", phone: "", department: "", designation: "", qualification: "", experience: "" };
+const BLANK = { name: "", email: "", phone: "", department: "", designation: "", qualification: "", experience: "", photoUrl: "" };
 
 export default function Faculty() {
   const { departments, deptName, refresh } = useData();
@@ -24,6 +24,27 @@ export default function Faculty() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(BLANK);
+  const photoRef = useRef(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+
+  /* The photograph is stored in the public bucket, the same place the
+     directory reads it from, so a face appears on the card immediately. */
+  async function pickPhoto(e) {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    setUploadingPhoto(true);
+    try {
+      const body = new FormData();
+      body.append("file", f);
+      const { data } = await client.post("/uploads", body);
+      setForm((fm) => ({ ...fm, photoUrl: data.url }));
+    } catch (err) {
+      push(err.response?.data?.error || "Could not upload the photograph.", "error");
+    } finally {
+      setUploadingPhoto(false);
+      if (photoRef.current) photoRef.current.value = "";
+    }
+  }
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
@@ -155,17 +176,45 @@ export default function Faculty() {
 
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editing ? "Edit Faculty" : "Enroll New Faculty"} width="max-w-2xl">
         <form onSubmit={submit} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="sm:col-span-2 flex items-center gap-4">
+            <button
+              type="button"
+              onClick={() => photoRef.current?.click()}
+              className="w-16 h-16 rounded-full flex items-center justify-center overflow-hidden shrink-0"
+              style={{ background: "var(--color-surface-sunken)", border: "1px dashed var(--color-border-default)" }}
+              aria-label="Upload a photograph"
+            >
+              {form.photoUrl
+                ? <img src={form.photoUrl} alt="" className="w-full h-full object-cover" />
+                : <Upload size={18} style={{ color: "var(--color-text-muted)" }} />}
+            </button>
+            <input ref={photoRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={pickPhoto} className="hidden" />
+            <div className="min-w-0">
+              <div className="text-xs font-medium" style={{ color: "var(--color-text-secondary)" }}>
+                {uploadingPhoto ? "Uploading…" : form.photoUrl ? "Click the photograph to replace it" : "Click to add a photograph"}
+              </div>
+              <div className="text-[11px] mt-0.5" style={{ color: "var(--color-text-muted)" }}>
+                Square, at least 512x512, JPEG under 1 MB.
+              </div>
+              {form.photoUrl && (
+                <button type="button" onClick={() => setForm({ ...form, photoUrl: "" })}
+                  className="text-[11px] mt-1 hover:underline" style={{ color: "var(--color-danger)" }}>
+                  Remove photograph
+                </button>
+              )}
+            </div>
+          </div>
           <div className="sm:col-span-2">
             <label className="block text-xs font-medium text-slate-500 mb-1">Full Name *</label>
             <input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="input" />
           </div>
           <div>
-            <label className="block text-xs font-medium text-slate-500 mb-1">Email *</label>
-            <input required type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="input" />
+            <label className="block text-xs font-medium text-slate-500 mb-1">Email</label>
+            <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="input" />
           </div>
           <div>
-            <label className="block text-xs font-medium text-slate-500 mb-1">Phone *</label>
-            <input required value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="input" />
+            <label className="block text-xs font-medium text-slate-500 mb-1">Phone</label>
+            <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="input" />
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-500 mb-1">Department *</label>
